@@ -1,49 +1,47 @@
 # dsh-treekeeper
 
-[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+Runtime process-tree reconciliation and governance plugin for DeepSeek Harness.
 
-**Ledger ↔ OS reconciliation engine with unified governance for DeepSeek Harness.** Does the official task ledger (background jobs, subagent genealogy) match the processes actually alive on your machine? Whatever does not — leaked MCP servers, orphaned npx chains, unattributed residents — gets attributed, aged, and killed behind guards.
+**Status: work in progress (skeleton).** The pure-function core (attribution, leak heuristics) is tested; host integration is not verified yet — see "Status".
 
-[中文](README.md) | English
+## Problem
 
-## Why
-
-- **Jobs have no process view**: `JobSnapshot` knows the owning session but carries no pid. Whether a background bash or subagent left OS children behind is nobody's business today.
-- **Children leak**: the same MCP server relaunched again and again, old copies never exiting — dozens of node/cmd processes eating memory, invisible to every existing panel.
-- **Plugins raise processes**: every vision/MCP/terminal plugin may leave resident children behind; nothing audits them after install.
+The DSH task ledger (the `jobs` registry and the subagent genealogy) records background work but carries no OS process facts: which processes a background bash or subagent left behind, whether they leaked, and who owns them is unanswered by the ledger and by every existing panel.
 
 ## What it does
 
-- **Process-tree attribution**: periodic OS samples, ancestor-walked down from the harness root; every process labeled (harness / some plugin / unattributed) with memory and age.
-- **Leak heuristics**: same command line ≥N copies, orphaned survivors of dead parents, over-long plugin children.
-- **Ledger reconciliation**: the cross-session jobs registry and subagent genealogy joined (indicatively) against the OS tree; jobs without processes and processes without owners both get called out.
-- **Guarded tree kill**: creation-time precheck (pid-reuse guard), protected-name and self-tree whitelists, double confirmation, post-kill verification.
-- **Plugin audit**: attribute resident children back to the plugin that spawned them via `node_modules/<pkg>` paths.
+- **Process-tree attribution**: periodic OS sampling; processes are walked down the ancestor chain to the harness root; whatever does not reach a known root lands in an "unattributed" bucket.
+- **Leak heuristics**: same command line ≥N copies, survivors of dead parents, plugin-attributed children alive past a threshold.
+- **Ledger reconciliation**: the cross-session `jobs` registry joined indicatively against the OS tree (`JobSnapshot` has no pid; the join matches command lines and is labeled indicative).
+- **Plugin audit**: processes whose command line contains `node_modules/<pkg>/` are attributed to the plugin package that spawned them.
+- **Tree kill**: `taskkill /T` behind a creation-time precheck (pid-reuse guard), protected-name and self-tree whitelists, client-side double confirmation, and a post-kill liveness check.
 
-## Install
+## Status
 
-```sh
-dsh plugin --profile web add dsh-treekeeper
-```
+Implemented:
 
-## Use
+- Sampler (Windows CIM; degrades to `tasklist`, which disables attribution and says so);
+- Attribution and leak heuristics (pure functions, covered by `node --test`);
+- Host route `/dsh-treekeeper/api` (snapshot / jobs / subtree / history / kill / config);
+- Browser panel (findings, unattributed bucket, job ledger, two-step kill).
 
-A "🌳 TreeKeeper" floating button appears in the web UI (bottom-left). The panel shows leak findings, the unattributed bucket, and the cross-session job ledger with guarded kill buttons (two-click arm + system confirm; the server re-checks creation time and whitelists).
+Not verified / not done:
+
+- CIM availability inside the host process, the real `jobs.list()` signature, panel slot — pending host integration;
+- Subagent genealogy resolution (`@deepseek-ai/dsh-subagent` dynamic import written, fallback untested);
+- Not published to npm; not submitted to awesome-dsh-plugin.
 
 ## Security model
 
-- Same-origin guard on `/api` (Fetch Metadata + Origin + loopback Host), POST-only mutations.
-- Server-side kill gates: whitelist, protected system names, pid-reuse precheck; every kill lands in a local history file.
-- Read-only sampling plus explicit kills only; no session content is read, nothing leaves the machine.
+- Same-origin guard on `/api` (Fetch Metadata + Origin + loopback Host); mutations are POST-only.
+- Server-side kill gates: pid-reuse precheck, whitelist and protected system names, post-kill verification; every kill is appended to a local history file.
+- Read-only sampling plus explicit kills only; no session content is read; nothing leaves the machine.
 
-## Platform
+## Platform and limits
 
-Windows first (CIM sampling; automatic `tasklist` degradation disables attribution and says so). macOS/Linux samplers are on the roadmap.
-
-## Known limits
-
-- Job ↔ process joins are **indicative** (official `JobSnapshot` has no pid) — labeled as such, never auto-killed.
+- Windows first; non-Windows sampling is not implemented.
 - Processes spawned outside `ctx.subprocess` are only visible through the OS layer.
+- macOS/Linux: roadmap.
 
 ## License
 
