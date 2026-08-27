@@ -5,7 +5,7 @@
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
-    "test": "node --test test/attribute.test.js test/leak.test.js"
+    "test": "node --test test/*.test.js"
   },
   "exports": {
     ".": "./lib/index.js",
