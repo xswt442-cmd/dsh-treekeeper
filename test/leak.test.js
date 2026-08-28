@@ -54,3 +54,18 @@ test('collectFindings never proposes protected system processes', () => {
   }
   assert.ok(findings.some((f) => f.type === 'duplicate'))
 })
+
+test('collectFindings ignores duplicate and orphan candidates outside the host tree', () => {
+  const procs = [
+    proc(1, 0, 'node host.js'),
+    proc(2, 1, 'node host-child.js'),
+    proc(10, 999, 'node system-worker.js'),
+    proc(11, 999, 'node system-worker.js'),
+    proc(12, 999, 'node system-worker.js')
+  ]
+  const attribution = attribute(procs, new Map([[1, 'harness']]))
+
+  const findings = collectFindings(procs, attribution, { minCopies: 3 })
+
+  assert.deepEqual(findings, [])
+})

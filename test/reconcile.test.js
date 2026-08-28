@@ -16,14 +16,16 @@ test('reconciliation labels command-line joins as indicative evidence', () => {
     source: 'job', id: 'bash-1', label: 'node worker.js', ownerSession: 'session-1',
     status: 'running', startedAt: 50, pids: [10], indicative: true
   })
-  assert.equal(result.rows[1].source, 'os-unattributed')
+  assert.equal(result.rows.length, 1, 'unattributed processes stay in the separate investigation bucket')
   assert.equal(result.summary.jobsMatched, 1)
+  assert.equal(result.summary.osOnly, 0)
+  assert.equal(result.summary.unattributed, 1)
 })
 
-test('reconciliation stays useful when the limited jobs seam is absent', () => {
+test('reconciliation keeps unattributed OS processes out of the DSH ledger rows', () => {
   const result = reconcile(null, procs, new Map())
 
   assert.equal(result.summary.jobs, 0)
-  assert.equal(result.summary.osOnly, 2)
+  assert.equal(result.summary.osOnly, 0)
   assert.equal(result.summary.unattributed, 2)
 })
