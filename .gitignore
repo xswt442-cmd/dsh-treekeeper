@@ -5,3 +5,8 @@ test1.*
 .DS_Store
 dist/
 testplace/
+
+# Local browser/Playwright QA artifacts
+.playwright-mcp/
+playwright-report/
+test-results/
