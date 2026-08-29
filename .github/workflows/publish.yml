@@ -62,7 +62,6 @@ jobs:
         run: npm publish --provenance --access public
 
       - name: GitHub release with CHANGELOG notes
-        if: steps.published.outputs.already != 'yes'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -73,7 +72,7 @@ jobs:
             const v=process.env.PKG_VERSION;
             let on=false,out=[];
             for(const l of fs.readFileSync('CHANGELOG.md','utf8').split('\\n')){
-              if(l.startsWith('## ')){ if(on)break; on=l.startsWith('## '+v); continue; }
+              if(l.startsWith('## ')){ if(on)break; on=new RegExp('^## (?:\\['+v.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')+'\\]|'+v+'(?:\\s|$))').test(l); continue; }
               if(on)out.push(l);
             }
             console.log(out.join('\\n').trim()||'Release '+v);
