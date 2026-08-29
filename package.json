@@ -1,7 +1,7 @@
 {
   "name": "dsh-treekeeper",
-  "version": "0.0.1",
-  "description": "DSH 运行时进程树对账与治理：把官方任务账本（jobs/子代理）与本机真实进程树对账，标出未归属/泄漏/孤儿进程并守卫式树杀。Runtime process-tree reconciliation for DeepSeek Harness: join the official jobs & subagent ledger with the live OS process tree, surface unattributed/leaked/orphaned children, and kill trees behind creation-time guards.",
+  "version": "0.1.0",
+  "description": "DSH 运行时进程树对账与治理：把当前宿主的任务账本与本机真实进程树对账，标出未归属/泄漏/孤儿进程并守卫式树杀。Runtime process-tree reconciliation for DeepSeek Harness: join the current host's job ledger with the live OS process tree, surface unattributed/leaked/orphaned children, and kill trees behind creation-time guards.",
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
@@ -24,7 +24,7 @@
   "dshhub": {
     "schemaVersion": 1,
     "displayName": "treekeeper",
-    "summary": "账本↔OS 对账引擎：跨会话任务/子代理账本对照本机真实进程树，标出未归属、泄漏与孤儿进程，守卫式（创建时间预检+白名单）树杀，插件级常驻子进程审计。",
+    "summary": "账本↔OS 对账引擎：对照当前 DSH 宿主任务账本与本机真实进程树，标出未归属、泄漏与孤儿进程，守卫式（创建时间预检+白名单）树杀，插件级常驻子进程审计。",
     "categories": ["dev", "Web UI"],
     "surfaces": ["host", "web"],
     "capabilities": {},
