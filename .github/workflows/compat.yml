@@ -1,0 +1,113 @@
+name: compat
+
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main, dev]
+
+permissions:
+  contents: read
+
+jobs:
+  static:
+    name: static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: client.js syntax
+        run: node --check lib/client.js
+      - name: index.js syntax
+        run: node --check lib/index.js
+      - name: host module exports a DSH plugin
+        run: |
+          node --input-type=module -e "import('./lib/index.js').then(m => { if (!m.default || typeof m.default.apply !== 'function') { console.error('missing default plugin'); process.exit(1) } })"
+      - name: unit tests
+        run: npm test
+      - name: package contents
+        run: npm pack --dry-run
+      - name: manifest consistency
+        shell: pwsh
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          if (-not $pkg.dsh.bundle.patch) { Write-Error 'dsh.bundle.patch missing' }
+          if ($pkg.dsh.client.platform -ne 'web') { Write-Error 'dsh.client.platform must be web' }
+          $client = Get-Content lib/client.js -Raw
+          if ($client -notmatch [regex]::Escape("id: '$($pkg.name)'")) { Write-Error 'client bundle id does not match package name' }
+          $patch = Get-Content cordis.patch.yml -Raw
+          if ($patch -notmatch [regex]::Escape($pkg.name)) { Write-Error 'patch does not mount this package' }
+          $shared = Get-Content lib/shared.js -Raw
+          if ($shared -notmatch [regex]::Escape("VERSION = '$($pkg.version)'")) { Write-Error 'lib/shared.js VERSION does not match package version' }
+
+  boot-check:
+    name: boot DSH Web with bundle (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: install DSH
+        run: npm i -g @deepseek-ai/dsh
+      - name: register bundle into a temporary profile
+        shell: pwsh
+        env:
+          DSH_HOME: ${{ runner.temp }}\dshhome
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force "$env:DSH_HOME\profiles\web\node_modules" | Out-Null
+          $src = (Get-Location).Path
+          New-Item -ItemType Junction -Path "$env:DSH_HOME\profiles\web\node_modules\dsh-treekeeper" -Target $src | Out-Null
+          $profileJson = @'
+          {
+            "name": "dsh-profile-web",
+            "private": true,
+            "dependencies": {},
+            "dsh": { "profile": { "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-treekeeper"] } }
+          }
+          '@ | ConvertFrom-Json | ConvertTo-Json -Depth 10
+          [System.IO.File]::WriteAllText("$env:DSH_HOME\profiles\web\package.json", $profileJson, (New-Object System.Text.UTF8Encoding($false)))
+      - name: boot and verify TreeKeeper
+        shell: pwsh
+        env:
+          DSH_HOME: ${{ runner.temp }}\dshhome
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $globalRoot = (& npm root -g).Trim()
+          $dshBin = Join-Path $globalRoot '@deepseek-ai\dsh\lib\bin.js'
+          if (-not (Test-Path $dshBin)) { throw "dsh bin not found at $dshBin" }
+          $process = Start-Process -FilePath (Get-Command node).Source -ArgumentList "`"$dshBin`"", 'web', '--port', '3129' -WindowStyle Hidden -PassThru
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 60; $i++) {
+              Start-Sleep -Seconds 1
+              try {
+                $response = Invoke-WebRequest -Uri 'http://127.0.0.1:3129/' -UseBasicParsing -TimeoutSec 2
+                if ($response.StatusCode -eq 200) { $ready = $true; break }
+              } catch {}
+              if ($process.HasExited) { break }
+            }
+            if (-not $ready) { throw 'dsh web did not become ready' }
+
+            $base = 'http://127.0.0.1:3129/dsh-treekeeper/api'
+            $snapshot = Invoke-RestMethod -Uri "$base?action=snapshot" -TimeoutSec 20
+            if (-not $snapshot.ok -or $null -eq $snapshot.processes) { throw 'snapshot returned an unexpected payload' }
+            $client = Invoke-WebRequest -Uri 'http://127.0.0.1:3129/plugins/dsh-treekeeper/client.js' -UseBasicParsing -TimeoutSec 5
+            if ($client.StatusCode -ne 200) { throw 'client bundle was not served' }
+
+            function ApiCode([string]$method, [string]$url, [string[]]$curlArgs = @()) {
+              & curl.exe -s -o NUL -w '%{http_code}' --noproxy '*' -X $method @curlArgs $url
+            }
+            if ((ApiCode GET "$base?action=kill") -ne '405') { throw 'guard regression: GET kill must be 405' }
+            if ((ApiCode POST "$base?action=kill" @('-H', 'Origin: https://evil.example', '-d', '{"pid":1,"seenCreatedMs":1}')) -ne '403') { throw 'guard regression: foreign Origin must be 403' }
+            if ((ApiCode GET "$base?action=snapshot" @('-H', 'sec-fetch-site: cross-site')) -ne '403') { throw 'guard regression: cross-site metadata must be 403' }
+            if ((ApiCode GET "$base?action=snapshot" @('-H', 'Host: rebound.example')) -ne '403') { throw 'guard regression: non-loopback Host must be 403' }
+            if ((ApiCode GET "$base?action=not-real") -ne '400') { throw 'unknown action must be 400' }
+            Write-Host 'compat check passed'
+          } finally {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+          }

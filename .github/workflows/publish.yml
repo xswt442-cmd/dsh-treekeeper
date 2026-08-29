@@ -1,0 +1,81 @@
+name: publish
+
+# A release is created by updating package.json and CHANGELOG.md, creating a
+# matching vX.Y.Z tag, and pushing that tag. npm Trusted Publishing exchanges
+# GitHub's OIDC identity for a publish credential; no npm token is stored here.
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  publish:
+    name: publish to npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Create the matching GitHub release.
+      id-token: write # Required by npm Trusted Publishing provenance.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: tag matches package.json version
+        shell: bash
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          tag=${GITHUB_REF_NAME#v}
+          if [ "$pkg" != "$tag" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match package.json version ${pkg}"
+            exit 1
+          fi
+
+      - name: release checks
+        shell: bash
+        run: |
+          tag=${GITHUB_REF_NAME#v}
+          node --check lib/client.js
+          node --check lib/index.js
+          npm test
+          node --input-type=module -e "import('./lib/index.js').then(m => { if (!m.default || typeof m.default.apply !== 'function') process.exit(1) })"
+          grep -qF "VERSION = '${tag}'" lib/shared.js || {
+            echo "::error::lib/shared.js VERSION does not match tag ${tag}"
+            exit 1
+          }
+          npm pack --dry-run
+
+      - name: skip when version is already published
+        id: published
+        shell: bash
+        run: |
+          pkg=$(node -p "require('./package.json').version")
+          if npm view --json "dsh-treekeeper@${pkg}" version > /dev/null 2>&1; then
+            echo "already=yes" >> "$GITHUB_OUTPUT"
+            echo "::warning::${pkg} is already on npm — nothing to publish"
+          fi
+
+      - name: publish to npm
+        if: steps.published.outputs.already != 'yes'
+        run: npm publish --provenance --access public
+
+      - name: GitHub release with CHANGELOG notes
+        if: steps.published.outputs.already != 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          export PKG_VERSION=${GITHUB_REF_NAME#v}
+          notes=$(node -e "
+            const fs=require('fs');
+            const v=process.env.PKG_VERSION;
+            let on=false,out=[];
+            for(const l of fs.readFileSync('CHANGELOG.md','utf8').split('\\n')){
+              if(l.startsWith('## ')){ if(on)break; on=l.startsWith('## '+v); continue; }
+              if(on)out.push(l);
+            }
+            console.log(out.join('\\n').trim()||'Release '+v);
+          ")
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "$notes"
