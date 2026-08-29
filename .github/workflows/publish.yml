@@ -67,14 +67,22 @@ jobs:
         shell: bash
         run: |
           export PKG_VERSION=${GITHUB_REF_NAME#v}
-          notes=$(node -e "
-            const fs=require('fs');
-            const v=process.env.PKG_VERSION;
-            let on=false,out=[];
-            for(const l of fs.readFileSync('CHANGELOG.md','utf8').split('\\n')){
-              if(l.startsWith('## ')){ if(on)break; on=new RegExp('^## (?:\\['+v.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')+'\\]|'+v+'(?:\\s|$))').test(l); continue; }
-              if(on)out.push(l);
+          notes=$(node <<'NODE'
+          const fs = require('fs')
+          const version = process.env.PKG_VERSION
+          const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          const heading = new RegExp(`^## (?:\\[${escaped}\\]|${escaped}(?:\\s|$))`)
+          let inSection = false
+          const lines = []
+          for (const line of fs.readFileSync('CHANGELOG.md', 'utf8').split('\n')) {
+            if (line.startsWith('## ')) {
+              if (inSection) break
+              inSection = heading.test(line)
+              continue
             }
-            console.log(out.join('\\n').trim()||'Release '+v);
-          ")
+            if (inSection) lines.push(line)
+          }
+          console.log(lines.join('\n').trim() || `Release ${version}`)
+          NODE
+          )
           gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes "$notes"
