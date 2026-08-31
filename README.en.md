@@ -12,10 +12,10 @@ A DSH Web runtime process-tree reconciliation plugin. It samples descendants of 
 
 - **Host process tree**: attributes only descendants of the current DSH host. Launcher ancestors are protected, but never claim sibling processes.
 - **Findings**: detects duplicate command lines, survivors of exited parents, and long-lived plugin children.
-- **Ledger reconciliation**: uses DSH's owner fence to list unowned jobs and jobs for every live session, then makes indicative command-line matches. The ledger has no PID and is never a termination authority.
+- **Ledger reconciliation**: uses DSH's owner fence to list unowned jobs and jobs for every live session, then makes indicative command-line matches.
 - **Subagent tree**: calls `subagents.listDescendants()` for the current session and shows durable lineage, depth, mode, and activity without waking cold sessions.
 - **Plugin attribution**: identifies the source package from `node_modules/<package>/` command-line paths.
-- **Guarded tree kill**: runs `taskkill /T /F` only after creation-time, protected-name, host/launcher whitelist, and fresh-complete-snapshot checks.
+- **Guarded tree kill**: runs `taskkill /T /F` on a confirmed process tree; see Security model for the full checks.
 - **Shared utility dock**: shares the main-content bottom-left Utility Dock with dsh-instance-manager through a versioned page-local protocol; no prerequisite plugin is required.
 
 ## Install
