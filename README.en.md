@@ -12,10 +12,11 @@ A DSH Web runtime process-tree reconciliation plugin. It samples descendants of 
 
 - **Host process tree**: attributes only descendants of the current DSH host. Launcher ancestors are protected, but never claim sibling processes.
 - **Findings**: detects duplicate command lines, survivors of exited parents, and long-lived plugin children.
-- **Ledger reconciliation**: when DSH exposes a jobs service, shows the unowned-job ledger and indicative command-line matches. The ledger has no PID and is never a termination authority.
+- **Ledger reconciliation**: uses DSH's owner fence to list unowned jobs and jobs for every live session, then makes indicative command-line matches. The ledger has no PID and is never a termination authority.
+- **Subagent tree**: calls `subagents.listDescendants()` for the current session and shows durable lineage, depth, mode, and activity without waking cold sessions.
 - **Plugin attribution**: identifies the source package from `node_modules/<package>/` command-line paths.
 - **Guarded tree kill**: runs `taskkill /T /F` only after creation-time, protected-name, host/launcher whitelist, and fresh-complete-snapshot checks.
-- **Shared utility dock**: shares the main-content bottom-left Utility Dock with dsh-instance-manager without occupying the sidebar footer or Settings entry.
+- **Shared utility dock**: shares the main-content bottom-left Utility Dock with dsh-instance-manager through a versioned page-local protocol; no prerequisite plugin is required.
 
 ## Install
 
@@ -33,8 +34,9 @@ The host registers the same-origin API at `/dsh-treekeeper/api`.
 
 | Action | Method | Description |
 |---|---|---|
-| `snapshot` | GET | Samples processes, attribution, findings, and the available job ledger; snapshots are reused for two seconds |
-| `jobs` | GET | Returns the available unowned-job ledger |
+| `snapshot&rootSessionId=` | GET | Samples processes, attribution, findings, jobs, and the selected session's subagent tree; OS snapshots are reused for two seconds |
+| `jobs` | GET | Returns unowned jobs and jobs visible to every live owner |
+| `subagents&rootSessionId=` | GET | Returns the complete durable subagent tree below one session |
 | `subtree&pid=` | GET | Returns the current process subtree for a PID |
 | `history` | GET | Returns the latest 100 local finding and action records |
 | `config` | POST | Updates runtime polling, tree-kill access, and additional whitelisted PIDs |
@@ -79,7 +81,7 @@ lib/sampler.js     Windows process sampling
 lib/attribute.js   process attribution and subtree calculation
 lib/leak.js        finding rules
 lib/act.js         guarded tree kill
-lib/ledger.js      DSH jobs ledger adapter
+lib/ledger.js      DSH owner-aware jobs and subagent-tree adapters
 test/              node:test suite
 ```
 

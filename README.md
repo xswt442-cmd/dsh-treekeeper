@@ -12,10 +12,11 @@ DSH Web 运行时进程树对账插件。它采样当前 DSH 宿主的 OS 进程
 
 - **宿主进程树**：只归属当前 DSH 宿主的后代；启动器祖先用于保护，不会把其兄弟进程误归入宿主。
 - **异常发现**：检测重复命令行、父进程已退出的孤儿进程和长时间存活的插件子进程。
-- **账本对照**：在 DSH 提供 jobs 服务时显示未归属任务账本及其指示性命令行匹配。任务账本不含 PID，不作为终止依据。
+- **账本对照**：通过 DSH 的 owner fence 列出未归属任务和所有活动 session 的 jobs，并作指示性命令行匹配。任务账本不含 PID，不作为终止依据。
+- **子代理树**：对当前 session 调用 `subagents.listDescendants()`，显示持久化父子关系、深度、模式和活动状态，不唤醒冷 session。
 - **插件归因**：从 `node_modules/<package>/` 命令行路径识别插件来源。
 - **受控树杀**：对已确认的进程树执行 `taskkill /T /F`；PID 创建时间、受保护名称、宿主/启动链白名单和新鲜完整快照均为必经校验。
-- **共享工具坞**：与 dsh-instance-manager 共用主内容区左下的 Utility Dock，不占用侧栏 footer 或设置入口。
+- **共享工具坞**：与 dsh-instance-manager 通过页面内版本化协议共用主内容区左下的 Utility Dock，无额外前置插件。
 
 ## 安装
 
@@ -33,8 +34,9 @@ dsh plugin --profile web add github:xswt442-cmd/dsh-treekeeper
 
 | 动作 | 方法 | 说明 |
 |---|---|---|
-| `snapshot` | GET | 采样进程、归属、异常发现和可用任务账本；快照 2 秒内复用 |
-| `jobs` | GET | 返回可用的未归属 jobs 账本 |
+| `snapshot&rootSessionId=` | GET | 采样进程、归属、异常发现、可用任务账本和指定 session 的子代理树；OS 快照 2 秒内复用 |
+| `jobs` | GET | 返回未归属和所有活动 owner 可见的 jobs |
+| `subagents&rootSessionId=` | GET | 返回指定 session 的完整持久化子代理树 |
 | `subtree&pid=` | GET | 返回指定 PID 的当前进程子树 |
 | `history` | GET | 返回最近 100 条本地异常和操作记录 |
 | `config` | POST | 更新运行期采样间隔、树杀开关和额外白名单 PID |
@@ -79,7 +81,7 @@ lib/sampler.js     Windows 进程采样
 lib/attribute.js   进程归属与子树计算
 lib/leak.js        异常发现规则
 lib/act.js         受控树杀
-lib/ledger.js      DSH jobs 账本适配
+lib/ledger.js      DSH jobs owner 账本与 subagent 树适配
 test/              node:test 测试
 ```
 

@@ -23,6 +23,11 @@ test('host registers the guarded TreeKeeper API and releases it on disposal', as
         return () => { released = true }
       }
     },
+    subagents: {
+      async listDescendants(rootSessionId) {
+        return [{ kind: 'child', id: 'child-1', parentId: rootSessionId, depth: 1, mode: 'continuable', label: 'worker', activity: 'running', hasChildren: false }]
+      }
+    },
     on(event, listener) {
       assert.equal(event, 'dispose')
       disposeListener = listener
@@ -44,6 +49,27 @@ test('host registers the guarded TreeKeeper API and releases it on disposal', as
     code: 'bad_action',
     error: 'unknown action "not-real"'
   })
+
+  const subagentRes = responseCapture()
+  await route.handler({
+    url: '/dsh-treekeeper/api?action=subagents&rootSessionId=root-1',
+    method: 'GET',
+    headers: {}
+  }, subagentRes)
+  assert.equal(subagentRes.writes[0].status, 200)
+  assert.deepEqual(subagentRes.writes[1].body.subagents, [{
+    kind: 'child', id: 'child-1', parentId: 'root-1', depth: 1,
+    mode: 'continuable', label: 'worker', activity: 'running', hasChildren: false
+  }])
+
+  const missingRootRes = responseCapture()
+  await route.handler({
+    url: '/dsh-treekeeper/api?action=subagents',
+    method: 'GET',
+    headers: {}
+  }, missingRootRes)
+  assert.equal(missingRootRes.writes[0].status, 400)
+  assert.equal(missingRootRes.writes[1].body.code, 'root_required')
 
   disposeListener()
   assert.equal(released, true)

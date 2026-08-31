@@ -6,6 +6,7 @@ import vm from 'node:vm'
 test('client factory returns a mountable Cordis plugin without early DOM effects', () => {
   let definition = null
   let styleElement = null
+  let dockRoot = null
   let domReads = 0
   const registered = []
   const source = fs.readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
@@ -21,7 +22,7 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
   })
   const context = {
     document: {
-      body: { appendChild() {} },
+      body: { appendChild(value) { dockRoot = value } },
       documentElement: { dataset: {}, style: { setProperty() {} } },
       head: { appendChild(value) { styleElement = value } },
       createElement: makeElement,
@@ -78,4 +79,8 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
   assert.equal(registered[0].options.id, 'treekeeper-panel')
   assert.equal(registered[0].options.order, 90)
   assert.equal(typeof registered[0].render, 'function')
+  const dock = context.window.__CREATEHELPER_DSH_UTILITY_DOCK_V1__
+  assert.equal(dock.protocol, 'createhelper.dsh.utility-dock')
+  assert.equal(dock.version, 1)
+  assert.equal(dockRoot.children[0].title, 'TreeKeeper')
 })

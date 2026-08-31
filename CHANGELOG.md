@@ -5,6 +5,15 @@ The format follows Keep a Changelog; versions are SemVer.
 
 ## Unreleased
 
+### Added
+
+- The panel reads the selected session's complete projection-backed subagent descendant tree without waking cold sessions.
+- The jobs ledger enumerates every live Agent through DSH's owner-fenced `jobs.list(owner)` API, while retaining unowned jobs once.
+
+### Changed
+
+- The shared utility dock advertises a private protocol name and version. Registration handles are ownership-safe across HMR replacement, and opening one dock panel closes the active sibling panel.
+
 ## [0.1.0] - 2026-08-29
 
 ### Added
