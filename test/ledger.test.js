@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createJobLedger, jobLedgerAvailability, listJobs, listSubagentTree } from '../lib/ledger.js'
+import { createJobLedger, createSubagentTree, jobLedgerAvailability, listJobs, listSubagentTree } from '../lib/ledger.js'
 
 test('job adapter prefers the mounted DSH jobs service', () => {
   const jobs = [{ id: 'bash-1', kind: 'bash', label: 'node worker.js', status: 'running', ownerSession: undefined }]
@@ -85,4 +85,40 @@ test('subagent adapter calls the mounted runtime with an explicit root', async (
 
 test('subagent adapter makes absent capabilities visible', async () => {
   assert.equal(await listSubagentTree({}, 'root-1'), null)
+})
+
+test('subagent tree captures the service through inject and never probes the guarded root context', async () => {
+  let dispose = null
+  const roots = []
+  const ctx = {
+    get subagents() { throw new Error('cannot get property "subagents" without inject') },
+    inject(services, mount) {
+      assert.deepEqual(services, ['subagents'])
+      mount({
+        subagents: {
+          async listDescendants(root) {
+            roots.push(root)
+            return [{ id: 'child-1' }]
+          }
+        },
+        on(event, callback) {
+          assert.equal(event, 'dispose')
+          dispose = callback
+        }
+      })
+    }
+  }
+
+  const tree = createSubagentTree(ctx)
+  assert.deepEqual(await tree.list('root-1'), [{ id: 'child-1' }])
+  assert.deepEqual(roots, ['root-1'])
+  dispose()
+  assert.equal(await tree.list('root-1'), null)
+})
+
+test('subagent adapter converts an unfenced service getter into capability unavailability', async () => {
+  const guarded = {
+    get subagents() { throw new Error('cannot get property "subagents" without inject') }
+  }
+  assert.equal(await listSubagentTree(guarded, 'root-1'), null)
 })
