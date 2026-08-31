@@ -5,6 +5,8 @@ The format follows Keep a Changelog; versions are SemVer.
 
 ## Unreleased
 
+## [0.1.1] - 2026-08-31
+
 ### Added
 
 - The panel reads the selected session's complete projection-backed subagent descendant tree without waking cold sessions.
@@ -13,6 +15,10 @@ The format follows Keep a Changelog; versions are SemVer.
 ### Changed
 
 - The shared utility dock advertises a private protocol name and version. Registration handles are ownership-safe across HMR replacement, and opening one dock panel closes the active sibling panel.
+
+### Fixed
+
+- The subagent tree captures `subagents.listDescendants` inside DSH's injection fence, preventing snapshot requests from failing with `cannot get property "subagents" without inject`.
 
 ## [0.1.0] - 2026-08-29
 
