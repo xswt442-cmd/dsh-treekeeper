@@ -9,6 +9,7 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
   let dockRoot = null
   let domReads = 0
   const registered = []
+  const injected = []
   const source = fs.readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
   const makeElement = () => ({
     style: { setProperty() {} },
@@ -58,7 +59,7 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
 
   const slots = {
     inject(name, mount) {
-      assert.equal(name, 'shell.overlay')
+      injected.push(name)
       mount()
     },
     register(options, render) {
@@ -74,11 +75,17 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
     on() {}
   })
 
-  assert.equal(registered.length, 1)
+  // DTK-M2: two slot contributions now — the root shell.overlay panel and the
+  // session-scope header action entry.
+  assert.deepEqual(injected, ['shell.overlay', 'conversation.session.header.actions'])
+  assert.equal(registered.length, 2)
   assert.equal(registered[0].options.name, 'shell.overlay')
   assert.equal(registered[0].options.id, 'treekeeper-panel')
   assert.equal(registered[0].options.order, 90)
   assert.equal(typeof registered[0].render, 'function')
+  assert.equal(registered[1].options.name, 'conversation.session.header.actions')
+  assert.equal(registered[1].options.id, 'treekeeper-open')
+  assert.equal(typeof registered[1].render, 'function')
   const dock = context.window.__CREATEHELPER_DSH_UTILITY_DOCK_V1__
   assert.equal(dock.protocol, 'createhelper.dsh.utility-dock')
   assert.equal(dock.version, 1)

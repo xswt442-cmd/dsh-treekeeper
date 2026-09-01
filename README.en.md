@@ -13,7 +13,8 @@ A DSH Web runtime process-tree reconciliation plugin. It samples descendants of 
 - **Host process tree**: attributes only descendants of the current DSH host. Launcher ancestors are protected, but never claim sibling processes.
 - **Findings**: detects duplicate command lines, survivors of exited parents, and long-lived plugin children.
 - **Ledger reconciliation**: uses DSH's owner fence to list unowned jobs and jobs for every live session, then makes indicative command-line matches.
-- **Subagent tree**: calls `subagents.listDescendants()` for the current session and shows durable lineage, depth, mode, and activity without waking cold sessions.
+- **Subagent tree**: calls `subagents.listDescendants()` for an explicit session and shows durable lineage, depth, mode, and activity without waking cold sessions.
+- **Session header entry**: adds a "View this session in TreeKeeper" action to the session header, passing the current session to the panel deterministically instead of guessing from the current selection.
 - **Plugin attribution**: identifies the source package from `node_modules/<package>/` command-line paths.
 - **Guarded tree kill**: runs `taskkill /T /F` on a confirmed process tree; see Security model for the full checks.
 - **Utility Dock**: Use the dock in the bottom-left corner of the Session settings as the entry point.
@@ -43,6 +44,20 @@ The host registers the same-origin API at `/dsh-treekeeper/api`.
 | `kill` | POST | Terminates a verified process tree with `{ pid, seenCreatedMs }` |
 
 Windows CIM is the primary process sampler. If it is unavailable, TreeKeeper falls back to `tasklist`. Fallback mode has no parent chain, so attribution and tree kill are disabled and the panel says so.
+
+## Session entry and the three states
+
+TreeKeeper has two entry points: the global panel (Dock, the root-scoped `shell.overlay` slot) and a **session header action** (`conversation.session.header.actions`, a `session`-scoped slot). The latter is guaranteed by the slot contract to render only when a live session exists and to receive a definite `sessionId`. Clicking it hands that session to the panel explicitly and focuses its subagent tree, replacing the previous guess of "current selection" from `sessions.list.getSnapshot().current`.
+
+The panel's subagent section converges on three states:
+
+| State | Behavior | Basis |
+| --- | --- | --- |
+| `available` | Shows the session's full subagent tree | The session entry supplied a definite sessionId and the host has `subagents.listDescendants()` |
+| `root-required` | Prompts "No session selected: use View this session in TreeKeeper in the session header" | The panel was opened from the Dock with no focused session (for example before entering any session) |
+| `unavailable` | Shows "This DSH build does not provide the capability" | The host has no mounted subagents service |
+
+The header action only appears while a session exists, so "no session selected" is expressed inside the root-scoped panel. Host (`subagentAvailability` in `lib/shared.js`) and client (`lib/client.js`) share the same decision ordering.
 
 ## Security model
 
@@ -76,7 +91,7 @@ The duplicate command-line threshold is fixed at three copies. The long-lived pl
 package.json       npm metadata and DSH declarations
 cordis.patch.yml   profile loader patch
 lib/index.js       host API and runtime state
-lib/client.js      Utility Dock entry and panel
+lib/client.js      Utility Dock panel and session header entry
 lib/sampler.js     Windows process sampling
 lib/attribute.js   process attribution and subtree calculation
 lib/leak.js        finding rules

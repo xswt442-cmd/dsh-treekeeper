@@ -30,3 +30,32 @@ test('API guard accepts loopback and rejects browser cross-site requests', () =>
   assert.equal(rejectedResponse.status, 403)
   assert.equal(rejectedResponse.body.code, 'cross_site')
 })
+
+// DTK-M2 guard regression: the session entry never touches the API directly,
+// but it raised the request surface of the client, so the origin/host/site
+// checks must stay airtight across every axis they already enforce.
+test('API guard rejects a foreign Origin and a rebound non-loopback Host', () => {
+  const guard = createGuard()
+
+  for (const origin of ['https://evil.example', 'https://127.0.0.1.evil.example', 'http://localhost.evil.example']) {
+    const rejectedResponse = response()
+    assert.equal(guard({ headers: { host: '127.0.0.1:3080', origin } }, rejectedResponse), false)
+    assert.equal(rejectedResponse.status, 403)
+    assert.equal(rejectedResponse.body.code, 'foreign_origin')
+  }
+
+  for (const host of ['rebound.example', '127.0.0.1.evil.example']) {
+    const rejectedResponse = response()
+    assert.equal(guard({ headers: { host, 'sec-fetch-site': 'same-origin' } }, rejectedResponse), false)
+    assert.equal(rejectedResponse.status, 403)
+    assert.equal(rejectedResponse.body.code, 'non_loopback')
+  }
+
+  // Loopback spellings all pass, including the subdomain form. The guard
+  // derives the hostname by splitting on ':' so bracketed IPv6 literals are
+  // out of scope for the Host header; that behaviour is unchanged by M2.
+  for (const host of ['localhost:3080', '127.0.0.1:3080', 'api.localhost']) {
+    const allowedResponse = response()
+    assert.equal(guard({ headers: { host, origin: 'http://localhost:3080' } }, allowedResponse), true)
+  }
+})

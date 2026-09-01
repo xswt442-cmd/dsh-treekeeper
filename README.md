@@ -13,7 +13,8 @@ DSH Web 运行时进程树对账插件。它采样当前 DSH 宿主的 OS 进程
 - **宿主进程树**：只归属当前 DSH 宿主的后代；启动器祖先用于保护，不会把其兄弟进程误归入宿主。
 - **异常发现**：检测重复命令行、父进程已退出的孤儿进程和长时间存活的插件子进程。
 - **账本对照**：通过 DSH 的 owner fence 列出未归属任务和所有活动 session 的 jobs，并作指示性命令行匹配。
-- **子代理树**：对当前 session 调用 `subagents.listDescendants()`，显示持久化父子关系、深度、模式和活动状态，不唤醒冷 session。
+- **子代理树**：对指定 session 调用 `subagents.listDescendants()`，显示持久化父子关系、深度、模式和活动状态，不唤醒冷 session。
+- **会话级入口**：在会话标题栏提供「在 TreeKeeper 中查看此会话」动作，把当前会话确定性地传入面板，不再依赖猜测的「当前选择」。
 - **插件归因**：从 `node_modules/<package>/` 命令行路径识别插件来源。
 - **受控树杀**：对已确认的进程树执行 `taskkill /T /F`，全部前置校验见「安全模型」。
 - **工具坞**：Session 左下角设置工具坞作为入口。
@@ -43,6 +44,20 @@ dsh plugin --profile web add github:xswt442-cmd/dsh-treekeeper
 | `kill` | POST | 以 `{ pid, seenCreatedMs }` 终止已验证的进程树 |
 
 进程采样优先使用 Windows CIM；CIM 不可用时降级为 `tasklist`。降级模式没有父进程链，归属和树杀会被禁用并在面板中显示。
+
+## 会话级入口与三态
+
+TreeKeeper 有两个入口：全局面板（Dock，`shell.overlay` 根作用域槽位）与**会话标题栏动作**（`conversation.session.header.actions`，`session` 作用域槽位）。后者由 DSH 的 slot 契约保证：只有当某个真实会话存在时才会渲染，且始终收到一个确定存在的 `sessionId`。点击该动作会把此会话显式传入面板并聚焦其子代理树，取代之前用 `sessions.list.getSnapshot().current` 猜测「当前选择」的做法。
+
+面板内的子代理树分区按三态收敛：
+
+| 状态 | 表现 | 依据 |
+| --- | --- | --- |
+| `available` | 显示该会话的完整子代理树 | 会话级入口提供了确定 sessionId，且宿主具备 `subagents.listDescendants()` 能力 |
+| `root-required` | 提示「未选定会话：在会话标题栏点击查看此会话」 | 面板从 Dock 打开且尚无聚焦会话（例如尚未进入任何会话） |
+| `unavailable` | 显示「此 DSH 构建未提供该能力」 | 宿主没有挂载 subagents 服务 |
+
+会话头动作本身只在有会话时出现，所以「未选定会话」只在根作用域面板里表达；三态判定顺序在宿主（`lib/shared.js` 的 `subagentAvailability`）与客户端（`lib/client.js`）保持一致。
 
 ## 安全模型
 
@@ -76,7 +91,7 @@ dsh plugin --profile web add github:xswt442-cmd/dsh-treekeeper
 package.json       npm 元数据与 DSH 声明
 cordis.patch.yml   profile loader 补丁
 lib/index.js       宿主 API 与运行期状态
-lib/client.js      Utility Dock 入口与面板
+lib/client.js      Utility Dock 面板与会话标题栏入口
 lib/sampler.js     Windows 进程采样
 lib/attribute.js   进程归属与子树计算
 lib/leak.js        异常发现规则
