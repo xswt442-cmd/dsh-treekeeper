@@ -16,6 +16,7 @@ DSH Web 运行时进程树对账插件。它采样当前 DSH 宿主的 OS 进程
 - **子代理树**：对当前 session 调用 `subagents.listDescendants()`，显示持久化父子关系、深度、模式和活动状态，不唤醒冷 session。
 - **插件归因**：从 `node_modules/<package>/` 命令行路径识别插件来源。
 - **受控树杀**：对已确认的进程树执行 `taskkill /T /F`，全部前置校验见「安全模型」。
+- **工具坞**：Session 左下角设置工具坞作为入口。
 
 ## 安装
 
