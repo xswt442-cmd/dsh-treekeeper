@@ -16,7 +16,6 @@ A DSH Web runtime process-tree reconciliation plugin. It samples descendants of 
 - **Subagent tree**: calls `subagents.listDescendants()` for the current session and shows durable lineage, depth, mode, and activity without waking cold sessions.
 - **Plugin attribution**: identifies the source package from `node_modules/<package>/` command-line paths.
 - **Guarded tree kill**: runs `taskkill /T /F` on a confirmed process tree; see Security model for the full checks.
-- **Shared utility dock**: shares the main-content bottom-left Utility Dock with dsh-instance-manager through a versioned page-local protocol; no prerequisite plugin is required.
 
 ## Install
 
