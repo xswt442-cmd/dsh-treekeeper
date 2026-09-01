@@ -7,6 +7,12 @@ on:
   push:
     branches: [main, dev]
 
+# One run per branch: a burst of commits cancels the superseded runs instead
+# of queueing a full boot-check behind each of them.
+concurrency:
+  group: compat-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 

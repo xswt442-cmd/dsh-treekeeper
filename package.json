@@ -5,7 +5,8 @@
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "docs:check": "node scripts/check-docs.mjs"
   },
   "exports": {
     ".": "./lib/index.js",

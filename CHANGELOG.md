@@ -1,0 +1,57 @@
+# 更新日志
+
+Release Notes 由对应版本段生成；最新版本在前。
+英文版见 [CHANGELOG.en.md](CHANGELOG.en.md)。
+
+## 0.2.0 - 2026-09-01
+
+### 新增
+
+- 会话标题栏可直接在 TreeKeeper 中打开指定 session 的 subagent 后代树，无需唤醒冷 session。
+- Host 与 client 统一使用 unavailable、root-required、available 三种可用状态。
+
+### 变更
+
+- Findings 使用统一证据词汇，并按严重程度分层显示。
+
+## 0.1.1 - 2026-08-31
+
+### 新增
+
+- 面板可读取所选 session 的完整 subagent 后代树。
+- Jobs 账本通过 owner-fenced API 枚举存活 Agent，并保留无主 jobs。
+
+### 变更
+
+- Mini Utility Dock 使用带版本的协议和 HMR 所有权保护。
+- 打开一个 Dock 面板会关闭同级面板。
+
+### 修复
+
+- Subagent 服务改在 DSH inject 围栏内访问。
+
+## 0.1.0 - 2026-08-29
+
+### 新增
+
+- 增加可定位、可隐藏的 Mini Utility Dock 入口。
+
+### 变更
+
+- Client 等待 slots 服务后再挂载入口和面板。
+- 改进采样状态、摘要、键盘焦点和视觉层级。
+
+### 修复
+
+- Kill 失败会保留在面板中。
+- 进程归属以 DSH host 为根，并明确标记证据范围。
+- 进程终止要求近期完整快照与可验证的创建时间。
+
+## 0.0.1 - 2026-08-27
+
+### 新增
+
+- 首次发布：Windows 进程采样、宿主归属与泄漏 findings。
+- 增加带创建时间校验的受控进程树终止。
+- 增加浏览器面板和核心单元测试。
+
