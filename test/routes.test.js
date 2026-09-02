@@ -13,7 +13,7 @@ function responseCapture() {
 
 test('host registers the guarded TreeKeeper API and releases it on disposal', async () => {
   let route = null
-  let disposeListener = null
+  let disposeCleanup = null
   let released = false
   apply({
     webServer: {
@@ -28,9 +28,9 @@ test('host registers the guarded TreeKeeper API and releases it on disposal', as
         return [{ kind: 'child', id: 'child-1', parentId: rootSessionId, depth: 1, mode: 'continuable', label: 'worker', activity: 'running', hasChildren: false }]
       }
     },
-    on(event, listener) {
-      assert.equal(event, 'dispose')
-      disposeListener = listener
+    // the host half registers its teardown via ctx.effect(() => cleanup)
+    effect(fn) {
+      disposeCleanup = fn()
     }
   })
 
@@ -71,6 +71,6 @@ test('host registers the guarded TreeKeeper API and releases it on disposal', as
   assert.equal(missingRootRes.writes[0].status, 400)
   assert.equal(missingRootRes.writes[1].body.code, 'root_required')
 
-  disposeListener()
+  disposeCleanup()
   assert.equal(released, true)
 })

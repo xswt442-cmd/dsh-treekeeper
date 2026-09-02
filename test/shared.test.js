@@ -51,11 +51,33 @@ test('API guard rejects a foreign Origin and a rebound non-loopback Host', () =>
     assert.equal(rejectedResponse.body.code, 'non_loopback')
   }
 
-  // Loopback spellings all pass, including the subdomain form. The guard
-  // derives the hostname by splitting on ':' so bracketed IPv6 literals are
-  // out of scope for the Host header; that behaviour is unchanged by M2.
-  for (const host of ['localhost:3080', '127.0.0.1:3080', 'api.localhost']) {
+  // Only exact loopback spellings pass; arbitrary localhost subdomains are
+  // rejected to keep DNS rebinding out of the API surface.
+  for (const host of ['localhost:3080', '127.0.0.1:3080']) {
     const allowedResponse = response()
     assert.equal(guard({ headers: { host, origin: 'http://localhost:3080' } }, allowedResponse), true)
+  }
+  const subdomainResponse = response()
+  assert.equal(guard({ headers: { host: 'api.localhost' } }, subdomainResponse), false)
+  assert.equal(subdomainResponse.body.code, 'non_loopback')
+  const mappedIpv6Response = response()
+  assert.equal(guard({ headers: { host: '[::ffff:127.0.0.1]:3080' } }, mappedIpv6Response), false)
+  assert.equal(mappedIpv6Response.body.code, 'non_loopback')
+})
+
+test('API guard uses strict loopback names, matching Origin ports, and bracketed IPv6', () => {
+  const guard = createGuard({ currentPort: () => 3080 })
+  for (const host of ['evil.localhost:3080', '[::1]:3080']) {
+    const res = response()
+    assert.equal(guard({ headers: { host } }, res), host.startsWith('evil') ? false : true)
+  }
+  for (const origin of ['http://evil.localhost:3080', 'http://localhost:3081']) {
+    const res = response()
+    assert.equal(guard({ headers: { host: '127.0.0.1:3080', origin } }, res), false)
+    assert.equal(res.status, 403)
+  }
+  for (const origin of ['http://[::1]:3080', 'http://127.0.0.1:3080']) {
+    const res = response()
+    assert.equal(guard({ headers: { host: '[::1]:3080', origin } }, res), true)
   }
 })

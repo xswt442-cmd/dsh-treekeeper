@@ -52,8 +52,11 @@ jobs:
           if ($shared -notmatch [regex]::Escape("VERSION = '$($pkg.version)'")) { Write-Error 'lib/shared.js VERSION does not match package version' }
 
   boot-check:
-    name: boot DSH Web with bundle (Windows)
-    runs-on: windows-latest
+    name: boot DSH Web with bundle (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -62,6 +65,7 @@ jobs:
       - name: install DSH
         run: npm i -g @deepseek-ai/dsh
       - name: register bundle into a temporary profile
+        if: runner.os == 'Windows'
         shell: pwsh
         env:
           DSH_HOME: ${{ runner.temp }}\dshhome
@@ -79,7 +83,18 @@ jobs:
           }
           '@ | ConvertFrom-Json | ConvertTo-Json -Depth 10
           [System.IO.File]::WriteAllText("$env:DSH_HOME\profiles\web\package.json", $profileJson, (New-Object System.Text.UTF8Encoding($false)))
+      - name: register bundle into a temporary profile (Ubuntu)
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          DSH_HOME: ${{ runner.temp }}/dshhome
+        run: |
+          set -euo pipefail
+          mkdir -p "$DSH_HOME/profiles/web/node_modules"
+          ln -s "$GITHUB_WORKSPACE" "$DSH_HOME/profiles/web/node_modules/dsh-treekeeper"
+          printf '%s\n' '{"name":"dsh-profile-web","private":true,"dependencies":{},"dsh":{"profile":{"bundles":["@deepseek-ai/dsh-base","@deepseek-ai/dsh-web-app","dsh-treekeeper"]}}}' > "$DSH_HOME/profiles/web/package.json"
       - name: boot and verify TreeKeeper
+        if: runner.os == 'Windows'
         shell: pwsh
         env:
           DSH_HOME: ${{ runner.temp }}\dshhome
@@ -119,3 +134,25 @@ jobs:
           } finally {
             Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
           }
+      - name: boot and verify TreeKeeper (Ubuntu)
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          DSH_HOME: ${{ runner.temp }}/dshhome
+        run: |
+          set -euo pipefail
+          dsh_bin="$(npm root -g)/@deepseek-ai/dsh/lib/bin.js"
+          node "$dsh_bin" web --port 3129 > "$RUNNER_TEMP/dsh.log" 2>&1 &
+          dsh_pid=$!
+          trap 'kill "$dsh_pid" 2>/dev/null || true' EXIT
+          ready=false
+          for _ in $(seq 1 60); do
+            if curl --noproxy '*' -fsS --max-time 2 http://127.0.0.1:3129/ >/dev/null; then ready=true; break; fi
+            sleep 1
+          done
+          $ready
+          base='http://127.0.0.1:3129/dsh-treekeeper/api'
+          test "$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' "${base}?action=not-real")" = 400
+          test "$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' -H 'Origin: https://evil.example' "${base}?action=snapshot")" = 403
+          curl --noproxy '*' -fsS http://127.0.0.1:3129/plugins/dsh-treekeeper/client.js >/dev/null
+          echo 'Ubuntu boot check passed (Windows-only sampler intentionally not exercised)'
