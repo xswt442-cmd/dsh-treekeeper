@@ -3,6 +3,13 @@
 Release notes are generated from the matching version section; newest first.
 For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
+## 0.2.1 - 2026-09-02
+
+### Changed
+
+- The Mini Utility Dock is now synchronized at build time from `dsh-mini-utility-dock`; published plugins remain standalone.
+- The Dock now filters external SVG icons while preserving sidebar geometry detection and fallback placement.
+
 ## 0.2.0 - 2026-09-01
 
 ### Added
@@ -54,4 +61,3 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 - Initial release: Windows process sampling, host attribution, and leak findings.
 - Added guarded process-tree termination with creation-time verification.
 - Added the browser panel and core unit tests.
-

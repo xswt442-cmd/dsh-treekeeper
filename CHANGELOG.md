@@ -3,6 +3,13 @@
 Release Notes 由对应版本段生成；最新版本在前。
 英文版见 [CHANGELOG.en.md](CHANGELOG.en.md)。
 
+## 0.2.1 - 2026-09-02
+
+### 变更
+
+- Mini Utility Dock 改由 `dsh-mini-utility-dock` 在构建时同步，插件发布物仍可独立运行。
+- Dock 统一过滤外部 SVG 图标，并保留侧栏几何探测与降级定位。
+
 ## 0.2.0 - 2026-09-01
 
 ### 新增
@@ -54,4 +61,3 @@ Release Notes 由对应版本段生成；最新版本在前。
 - 首次发布：Windows 进程采样、宿主归属与泄漏 findings。
 - 增加带创建时间校验的受控进程树终止。
 - 增加浏览器面板和核心单元测试。
-
