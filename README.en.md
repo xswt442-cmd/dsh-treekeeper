@@ -58,7 +58,8 @@ Configuration is process-local and resets on restart.
 - Windows is currently supported. If CIM is unavailable, sampling degrades to read-only and disables attribution and termination.
 - The API accepts same-origin requests only from a loopback TCP peer; network identity is decided by the peer address, not the Host/Origin headers, so a remote peer is rejected even when the host listens on 0.0.0.0; mutating actions are POST-only.
 - Termination requires a complete snapshot no older than 15 seconds and rechecks the PID creation time; only processes inside the DSH host tree may be terminated, while unknown processes are investigation-only and cannot be killed.
-- Critical system processes, the current host, its launcher chain, and additional whitelisted PIDs cannot be terminated; protection covers the entire descendant subtree, so if the target tree contains any protected PID the whole kill is refused.
+- Critical system processes, the current host, its launcher chain, and additional whitelisted PIDs cannot be terminated. Killable scope is the DSH host attribution only: an extra whitelisted PID is an attribution root for labelling, and its descendants stay visible but not killable, so protecting a PID never widens the kill scope.
+- Protected descendants are evaluated against a process tree sampled immediately before the kill: if that tree contains any protected PID the whole kill is refused. A protected descendant that appears after that sample cannot be excluded — `taskkill /T` has no exclusion switch — which is the residual TOCTOU boundary, not an absolute guarantee.
 - Jobs have no stable PID mapping to OS processes; command-line matches are investigative and never trigger automatic action.
 - Findings and termination results are written to `$DSH_HOME/treekeeper/history.jsonl`.
 

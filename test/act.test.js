@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { validateKillTarget, validateKillOwnership, killTree } from '../lib/act.js'
+import { attribute } from '../lib/attribute.js'
 
 const liveNode = { alive: true, createdMs: 1000, name: 'node.exe' }
 
@@ -36,6 +37,28 @@ test('kill ownership rejects a process outside the DSH host tree', () => {
   assert.deepEqual(validateKillOwnership(attribution, 1000), { ok: true, code: 'attributed' })
   // A missing attribution object must never let a kill through.
   assert.deepEqual(validateKillOwnership(null, 1000), { ok: false, code: 'unattributed' })
+})
+
+test('kill ownership rejects descendants of a whitelisted root (REVIEW-0904 P1)', () => {
+  // `extraWhitelistPids` registers pinned pids as attribution roots so the
+  // panel can label them. Authorizing those buckets would invert the setting:
+  // protecting a pid would widen the kill scope instead of narrowing it.
+  const procs = [
+    { pid: 1, ppid: 0, name: 'dsh', cmdline: 'dsh host', createdMs: 1, wsBytes: 0 },
+    { pid: 500, ppid: 1, name: 'pinned', cmdline: 'pinned root', createdMs: 1, wsBytes: 0 },
+    { pid: 501, ppid: 500, name: 'child', cmdline: 'child of pinned', createdMs: 1, wsBytes: 0 }
+  ]
+  const attribution = Object.fromEntries(
+    attribute(procs, new Map([[1, 'harness'], [500, 'whitelisted']])).attributed
+  )
+
+  // The pinned root's child is "attributed", but not to the harness.
+  assert.equal(validateKillOwnership(attribution, 501).ok, false)
+  assert.equal(validateKillOwnership(attribution, 501).code, 'non_harness_root')
+  // The pinned pid itself stays refused too.
+  assert.equal(validateKillOwnership(attribution, 500).code, 'non_harness_root')
+  // Harness descendants keep working.
+  assert.deepEqual(validateKillOwnership(attribution, 1), { ok: true, code: 'attributed' })
 })
 
 test('killTree refuses when a protected pid is a descendant (Problem 3)', async () => {

@@ -132,6 +132,7 @@ function boot(data) {
 
 function fixtureData() {
   const now = Date.now()
+  const hostAttribution = (depth) => ({ rootId: 100, rootLabel: 'harness', depth, pluginHint: null })
   const ownership = (scope, via) => ({ scope, via, rootLabel: scope === 'unattributed' ? null : 'harness', depth: scope === 'unattributed' ? null : 1, session: null, job: null })
   return {
     ok: true,
@@ -168,10 +169,13 @@ function fixtureData() {
       }
     ],
     unknown: [],
+    // Rows carry `attribution` because `processRows()` attaches it; kill
+    // authorization is derived from it, so a fixture without it would test a
+    // payload the host never produces.
     processes: [
-      { pid: 2, ppid: 100, name: 'node', cmdline: MCP, createdMs: now - 60000, wsBytes: 0, evidence: 'exact' },
-      { pid: 5, ppid: 0, name: 'node', cmdline: 'node mcp.js', createdMs: now - 60000, wsBytes: 0, evidence: 'unattributed' },
-      { pid: 6, ppid: 100, name: 'node', cmdline: 'legacy cmd', createdMs: now - 60000, wsBytes: 0, evidence: 'exact' }
+      { pid: 2, ppid: 100, name: 'node', cmdline: MCP, createdMs: now - 60000, wsBytes: 0, evidence: 'exact', attribution: hostAttribution(1) },
+      { pid: 5, ppid: 0, name: 'node', cmdline: 'node mcp.js', createdMs: now - 60000, wsBytes: 0, evidence: 'unattributed', attribution: null },
+      { pid: 6, ppid: 100, name: 'node', cmdline: 'legacy cmd', createdMs: now - 60000, wsBytes: 0, evidence: 'exact', attribution: hostAttribution(1) }
     ],
     reconcile: { summary: {}, rows: [] },
     subagents: [],
@@ -215,6 +219,32 @@ test('hard findings stay expanded with kill buttons; inferred collapse without o
     assert.ok(row, 'hard finding row visible: ' + label)
     assert.equal(allNodes(row, (node) => node.props?.className === 'tk-btn').length, 1, label)
   }
+})
+
+test('kill buttons follow harness attribution, not evidence alone (REVIEW-0904 P1)', () => {
+  const data = fixtureData()
+  // A whitelisted root's descendant is attributed, so `evidence` says 'exact',
+  // but it is not the DSH host tree: offering a kill button there would both
+  // lie about what the server accepts and turn a protection into an expansion.
+  data.processes.push({
+    pid: 7, ppid: 100, name: 'node', cmdline: 'pinned child', createdMs: Date.now() - 60000, wsBytes: 0,
+    evidence: 'exact', attribution: { rootId: 500, rootLabel: 'whitelisted', depth: 1, pluginHint: null }
+  })
+  const { surface } = boot(data)
+  const panel = panelOf(surface, data)
+  const rows = allNodes(panel, (node) => node.props?.className === 'tk-row')
+
+  const pinned = rows.find((node) => textOf(node).includes('pinned child'))
+  assert.ok(pinned, 'the whitelisted-root descendant row is rendered')
+  assert.equal(allNodes(pinned, (node) => node.props?.className === 'tk-btn').length, 0,
+    'a whitelisted-root descendant exposes no tree-kill button')
+
+  // Match on the row's own pid line: the duplicate finding renders the same
+  // command line as its evidence sample, so the cmdline alone is ambiguous.
+  const host = rows.find((node) => textOf(node).includes('pid 2 ·'))
+  assert.ok(host, 'the harness-attributed row is rendered')
+  assert.equal(allNodes(host, (node) => node.props?.className === 'tk-btn').length, 1,
+    'a harness-attributed row keeps its kill button')
 })
 
 test('the summary splits findings by tier', () => {
