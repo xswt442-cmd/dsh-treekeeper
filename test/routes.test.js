@@ -41,7 +41,8 @@ test('host registers the guarded TreeKeeper API and releases it on disposal', as
   await route.handler({
     url: '/dsh-treekeeper/api?action=not-real',
     method: 'GET',
-    headers: {}
+    headers: {},
+    socket: { remoteAddress: '127.0.0.1' }
   }, res)
   assert.equal(res.writes[0].status, 400)
   assert.deepEqual(res.writes[1].body, {
@@ -54,7 +55,8 @@ test('host registers the guarded TreeKeeper API and releases it on disposal', as
   await route.handler({
     url: '/dsh-treekeeper/api?action=subagents&rootSessionId=root-1',
     method: 'GET',
-    headers: {}
+    headers: {},
+    socket: { remoteAddress: '127.0.0.1' }
   }, subagentRes)
   assert.equal(subagentRes.writes[0].status, 200)
   assert.deepEqual(subagentRes.writes[1].body.subagents, [{
@@ -66,7 +68,8 @@ test('host registers the guarded TreeKeeper API and releases it on disposal', as
   await route.handler({
     url: '/dsh-treekeeper/api?action=subagents',
     method: 'GET',
-    headers: {}
+    headers: {},
+    socket: { remoteAddress: '127.0.0.1' }
   }, missingRootRes)
   assert.equal(missingRootRes.writes[0].status, 400)
   assert.equal(missingRootRes.writes[1].body.code, 'root_required')
