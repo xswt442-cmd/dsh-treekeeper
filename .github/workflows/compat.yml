@@ -111,13 +111,17 @@ jobs:
             $ready = $false
             for ($i = 0; $i -lt 60; $i++) {
               Start-Sleep -Seconds 1
-              try {
-                $response = Invoke-WebRequest -Uri 'http://127.0.0.1:3129/' -UseBasicParsing -TimeoutSec 2
-                if ($response.StatusCode -eq 200) { $ready = $true; break }
-              } catch {}
+              & curl.exe -s --noproxy '*' --max-time 2 -o NUL 'http://127.0.0.1:3129/'
+              if ($LASTEXITCODE -eq 0) { $ready = $true; break }
               if ($process.HasExited) { break }
             }
-            if (-not $ready) { throw 'dsh web did not become ready' }
+            if (-not $ready) {
+              Write-Host '--- dsh stdout ---'
+              Get-Content $launchOut -ErrorAction SilentlyContinue
+              Write-Host '--- dsh stderr ---'
+              Get-Content $launchErr -ErrorAction SilentlyContinue
+              throw 'dsh web did not become ready'
+            }
 
             $launchText = (Get-Content $launchOut -Raw -ErrorAction SilentlyContinue) + (Get-Content $launchErr -Raw -ErrorAction SilentlyContinue)
             $launchUrl = [regex]::Match($launchText, 'http://127\.0\.0\.1:3129/\?token=[^\s\)]+').Value
@@ -168,10 +172,14 @@ jobs:
           trap 'kill "$dsh_pid" 2>/dev/null || true' EXIT
           ready=false
           for _ in $(seq 1 60); do
-            if curl --noproxy '*' -fsS --max-time 2 http://127.0.0.1:3129/ >/dev/null; then ready=true; break; fi
+            if curl --noproxy '*' -sS --max-time 2 -o /dev/null http://127.0.0.1:3129/; then ready=true; break; fi
             sleep 1
           done
-          $ready
+          if ! $ready; then
+            echo '--- dsh log ---' >&2
+            cat "$RUNNER_TEMP/dsh.log" >&2 || true
+            exit 1
+          fi
           launch_url=$(sed -n 's#.*\(http://127\.0\.0\.1:3129/?token=[^ )]*\).*#\1#p' "$RUNNER_TEMP/dsh.log" | head -n 1)
           cookie_args=()
           shell_html="$RUNNER_TEMP/dsh-shell.html"
