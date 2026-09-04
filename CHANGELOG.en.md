@@ -3,7 +3,7 @@
 Release notes are generated from the matching version section; newest first.
 For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.2.2 - 2026-09-04
 
 ### Changed
 
@@ -11,6 +11,7 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 - Descendant queries now receive cancellation from both HTTP request lifetime and browser refresh lifetime. A newer refresh, panel close, or request disconnect stops the obsolete traversal.
 - Integrated the DSH global locale so runtime language changes update the panel, session entry, and Dock label.
 - Removed the unused dynamic `interruptAgent` helper, whose expected export does not exist in RC1; compatibility checks now pin `0.1.2-rc.1` alongside latest.
+- Compatibility CI now establishes a signed session from the launch token, checks the client bundle at the URL advertised by the shell, and asserts the explicit unsupported-sampling response on Linux.
 
 ### Fixed
 
