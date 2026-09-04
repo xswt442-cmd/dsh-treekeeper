@@ -123,21 +123,37 @@ jobs:
               throw 'dsh web did not become ready'
             }
 
-            $launchText = (Get-Content $launchOut -Raw -ErrorAction SilentlyContinue) + (Get-Content $launchErr -Raw -ErrorAction SilentlyContinue)
-            $launchUrl = [regex]::Match($launchText, 'http://127\.0\.0\.1:3129/\?token=[^\s\)]+').Value
             $cookieJar = Join-Path $env:RUNNER_TEMP 'dsh-cookies.txt'
             $shellFile = Join-Path $env:RUNNER_TEMP 'dsh-shell.html'
-            $cookieArgs = @()
-            if ($launchUrl) {
-              & curl.exe -s -L --noproxy '*' -c $cookieJar $launchUrl -o $shellFile
-              if ($LASTEXITCODE -ne 0) { throw 'failed to exchange launch token for browser cookie' }
-              $cookieArgs = @('-b', $cookieJar)
-            } else {
-              & curl.exe -fsS --noproxy '*' 'http://127.0.0.1:3129/' -o $shellFile
+            $shellReady = $false
+            $tokenAnnounced = $false
+            $shellCode = '000'
+            for ($i = 0; $i -lt 15 -and -not $shellReady; $i++) {
+              $launchText = [string](Get-Content $launchOut -Raw -ErrorAction SilentlyContinue) + [string](Get-Content $launchErr -Raw -ErrorAction SilentlyContinue)
+              $token = [regex]::Match($launchText, '[?&]token=([^&\s\)]+)').Groups[1].Value
+              $launchUrl = 'http://127.0.0.1:3129/'
+              if ($token) {
+                $tokenAnnounced = $true
+                $launchUrl += "?token=$token"
+              }
+              $shellCode = & curl.exe -sS -L --noproxy '*' -c $cookieJar -b $cookieJar -o $shellFile -w '%{http_code}' $launchUrl
+              if ($LASTEXITCODE -eq 0 -and $shellCode -eq '200') { $shellReady = $true; break }
+              Start-Sleep -Seconds 1
             }
+            if (-not $shellReady) {
+              Write-Host '--- dsh stdout ---'
+              Get-Content $launchOut -ErrorAction SilentlyContinue
+              Write-Host '--- dsh stderr ---'
+              Get-Content $launchErr -ErrorAction SilentlyContinue
+              throw "web shell authentication failed: HTTP $shellCode (launch token announced: $tokenAnnounced)"
+            }
+            $cookieArgs = @('-b', $cookieJar)
 
             $base = 'http://127.0.0.1:3129/dsh-treekeeper/api'
-            $snapshot = (& curl.exe -s --noproxy '*' @cookieArgs "${base}?action=snapshot") | ConvertFrom-Json
+            $snapshotFile = Join-Path $env:RUNNER_TEMP 'treekeeper-snapshot.json'
+            $snapshotCode = & curl.exe -sS --noproxy '*' @cookieArgs -o $snapshotFile -w '%{http_code}' "${base}?action=snapshot"
+            if ($LASTEXITCODE -ne 0 -or $snapshotCode -ne '200') { throw "authenticated snapshot failed: HTTP $snapshotCode" }
+            $snapshot = Get-Content $snapshotFile -Raw | ConvertFrom-Json
             if (-not $snapshot.ok -or $null -eq $snapshot.processes) { throw 'snapshot returned an unexpected payload' }
             $shellHtml = Get-Content $shellFile -Raw
             $advertised = [regex]::Match($shellHtml, '["''](/?plugins/[^"'']*dsh-treekeeper/client\.js[^"'']*)["'']')
@@ -145,7 +161,7 @@ jobs:
             $bundlePath = [System.Net.WebUtility]::HtmlDecode($advertised.Groups[1].Value)
             if (-not $bundlePath.StartsWith('/')) { $bundlePath = "/$bundlePath" }
             $clientCode = & curl.exe -s -o NUL -w '%{http_code}' --noproxy '*' @cookieArgs "http://127.0.0.1:3129$bundlePath"
-            if ($clientCode -ne '200') { throw 'advertised client bundle was not served' }
+            if ($clientCode -ne '200') { throw "advertised client bundle failed: HTTP $clientCode ($bundlePath)" }
 
             function ApiCode([string]$method, [string]$url, [string[]]$curlArgs = @()) {
               & curl.exe -s -o NUL -w '%{http_code}' --noproxy '*' -X $method @cookieArgs @curlArgs $url
@@ -180,20 +196,29 @@ jobs:
             cat "$RUNNER_TEMP/dsh.log" >&2 || true
             exit 1
           fi
-          launch_url=$(sed -n 's#.*\(http://127\.0\.0\.1:3129/?token=[^ )]*\).*#\1#p' "$RUNNER_TEMP/dsh.log" | head -n 1)
-          cookie_args=()
+          cookie_jar="$RUNNER_TEMP/dsh-cookies.txt"
           shell_html="$RUNNER_TEMP/dsh-shell.html"
-          if [ -n "$launch_url" ]; then
-            cookie_jar="$RUNNER_TEMP/dsh-cookies.txt"
-            curl -fsS -L --noproxy '*' -c "$cookie_jar" "$launch_url" -o "$shell_html"
-            cookie_args=(-b "$cookie_jar")
-          else
-            curl -fsS --noproxy '*' 'http://127.0.0.1:3129/' -o "$shell_html"
-          fi
+          shell_ready=0
+          token_announced=0
+          shell_code=000
+          for _ in $(seq 1 15); do
+            token=$(sed -n 's/.*[?&]token=\([^&[:space:])]*\).*/\1/p' "$RUNNER_TEMP/dsh.log" | tail -n 1)
+            launch_url='http://127.0.0.1:3129/'
+            if [ -n "$token" ]; then launch_url="${launch_url}?token=${token}"; token_announced=1; fi
+            shell_code=$(curl -sS -L --noproxy '*' -c "$cookie_jar" -b "$cookie_jar" -o "$shell_html" -w '%{http_code}' "$launch_url" || true)
+            [ "$shell_code" = 200 ] && { shell_ready=1; break; }
+            sleep 1
+          done
+          [ "$shell_ready" = 1 ] || { echo "::error::web shell authentication failed: HTTP $shell_code (launch token announced: $token_announced)"; cat "$RUNNER_TEMP/dsh.log"; exit 1; }
+          cookie_args=(-b "$cookie_jar")
           base='http://127.0.0.1:3129/dsh-treekeeper/api'
+          snapshot_file="$RUNNER_TEMP/treekeeper-snapshot.json"
+          snapshot_code=$(curl --noproxy '*' "${cookie_args[@]}" -sS -o "$snapshot_file" -w '%{http_code}' "${base}?action=snapshot" || true)
+          [ "$snapshot_code" = 200 ] || { echo "::error::authenticated snapshot failed: HTTP $snapshot_code"; cat "$snapshot_file" 2>/dev/null || true; exit 1; }
           test "$(curl --noproxy '*' "${cookie_args[@]}" -s -o /dev/null -w '%{http_code}' "${base}?action=not-real")" = 400
           test "$(curl --noproxy '*' "${cookie_args[@]}" -s -o /dev/null -w '%{http_code}' -H 'Origin: https://evil.example' "${base}?action=snapshot")" = 403
-          bundle_path=$(grep -oE '/plugins/\?\?dsh-treekeeper/client\.js(&amp;|&)rev=[^"< ]+' "$shell_html" | head -n 1 | sed 's/&amp;/\&/g')
-          test -n "$bundle_path"
-          curl --noproxy '*' "${cookie_args[@]}" -fsS "http://127.0.0.1:3129$bundle_path" >/dev/null
+          bundle_path=$(grep -oE '/plugins/[^"< ]*dsh-treekeeper/client\.js[^"< ]*' "$shell_html" | head -n 1 | sed 's/&amp;/\&/g' || true)
+          [ -n "$bundle_path" ] || { echo '::error::shell did not advertise the dsh-treekeeper client bundle'; exit 1; }
+          bundle_code=$(curl --noproxy '*' "${cookie_args[@]}" -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:3129$bundle_path" || true)
+          [ "$bundle_code" = 200 ] || { echo "::error::advertised client bundle failed: HTTP $bundle_code ($bundle_path)"; exit 1; }
           echo 'Ubuntu boot check passed (Windows-only sampler intentionally not exercised)'
