@@ -214,7 +214,12 @@ jobs:
           base='http://127.0.0.1:3129/dsh-treekeeper/api'
           snapshot_file="$RUNNER_TEMP/treekeeper-snapshot.json"
           snapshot_code=$(curl --noproxy '*' "${cookie_args[@]}" -sS -o "$snapshot_file" -w '%{http_code}' "${base}?action=snapshot" || true)
-          [ "$snapshot_code" = 200 ] || { echo "::error::authenticated snapshot failed: HTTP $snapshot_code"; cat "$snapshot_file" 2>/dev/null || true; exit 1; }
+          # Linux intentionally has no process sampler. Reaching the guarded
+          # endpoint and receiving its explicit unsupported-platform failure
+          # proves auth/routing without pretending a Windows snapshot exists.
+          [ "$snapshot_code" = 500 ] || { echo "::error::Linux snapshot should report unsupported sampling, got HTTP $snapshot_code"; cat "$snapshot_file" 2>/dev/null || true; exit 1; }
+          grep -q '"ok":false' "$snapshot_file" || { echo '::error::Linux snapshot failure payload is malformed'; exit 1; }
+          grep -q 'only Windows sampling is implemented' "$snapshot_file" || { echo '::error::Linux snapshot did not report the documented platform limit'; exit 1; }
           test "$(curl --noproxy '*' "${cookie_args[@]}" -s -o /dev/null -w '%{http_code}' "${base}?action=not-real")" = 400
           test "$(curl --noproxy '*' "${cookie_args[@]}" -s -o /dev/null -w '%{http_code}' -H 'Origin: https://evil.example' "${base}?action=snapshot")" = 403
           bundle_path=$(grep -oE '/plugins/[^"< ]*dsh-treekeeper/client\.js[^"< ]*' "$shell_html" | head -n 1 | sed 's/&amp;/\&/g' || true)
