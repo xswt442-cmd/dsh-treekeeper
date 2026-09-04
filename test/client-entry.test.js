@@ -10,6 +10,7 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
   let domReads = 0
   const registered = []
   const injected = []
+  let localeNamespace = null
   const source = fs.readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
   const makeElement = () => ({
     style: { setProperty() {} },
@@ -69,6 +70,21 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
   plugin.apply({
     get() { assert.fail('client must wait for slots instead of probing it once') },
     inject(services, mount) {
+      if (Array.from(services)[0] === 'locale') {
+        mount({
+          locale: {
+            register(namespace, dictionaries) {
+              localeNamespace = namespace
+              assert.equal(dictionaries.en.refresh, 'Refresh')
+              return () => {}
+            },
+            bind: () => (key) => key,
+            subscribe: () => () => {}
+          },
+          on() {}
+        })
+        return
+      }
       assert.deepEqual(Array.from(services), ['slots'])
       mount({ slots })
     },
@@ -89,5 +105,6 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
   const dock = context.window.__CREATEHELPER_DSH_UTILITY_DOCK_V1__
   assert.equal(dock.protocol, 'createhelper.dsh.utility-dock')
   assert.equal(dock.version, 1)
+  assert.equal(localeNamespace, 'dsh-treekeeper')
   assert.equal(dockRoot.children[0].title, 'TreeKeeper')
 })

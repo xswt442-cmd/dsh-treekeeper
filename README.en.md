@@ -55,6 +55,8 @@ Configuration is process-local and resets on restart.
 
 ## Safety and limits
 
+On DSH 0.1.2-rc.1+, the browser API reuses the Connection signed cookie. Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal.
+
 - Windows is currently supported. If CIM is unavailable, sampling degrades to read-only and disables attribution and termination.
 - The API accepts same-origin requests only from a loopback TCP peer; network identity is decided by the peer address, not the Host/Origin headers, so a remote peer is rejected even when the host listens on 0.0.0.0; mutating actions are POST-only.
 - Termination requires a complete snapshot no older than 15 seconds and rechecks the PID creation time; only processes inside the DSH host tree may be terminated, while unknown processes are investigation-only and cannot be killed.

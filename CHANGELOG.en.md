@@ -5,11 +5,18 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
 ## Unreleased
 
+### Changed
+
+- Adapted the browser API to the DSH 0.1.2-rc.1 Connection signed cookie; a Connection rejection never falls back to the legacy loopback guard.
+- Descendant queries now receive cancellation from both HTTP request lifetime and browser refresh lifetime. A newer refresh, panel close, or request disconnect stops the obsolete traversal.
+- Integrated the DSH global locale so runtime language changes update the panel, session entry, and Dock label.
+- Removed the unused dynamic `interruptAgent` helper, whose expected export does not exist in RC1; compatibility checks now pin `0.1.2-rc.1` alongside latest.
+
 ### Fixed
 
 - Kill authorization now requires DSH host attribution: an extra whitelisted PID is still used for labelling, but its descendants are no longer killable. Previously protecting a PID widened the kill scope instead of narrowing it.
 - A kill re-samples the process tree and re-verifies the target's creation time, so the protected-descendant check no longer runs against a snapshot up to 15 seconds old.
-- The request guard now decides locality from the TCP peer address: non-loopback sources can no longer read process snapshots or kill trees. Previously a forged `Host: 127.0.0.1` passed the guard, while DSH supports listening on `0.0.0.0`.
+- The request guard now decides locality from the TCP peer address: non-loopback sources can no longer read process snapshots or kill trees. On older or custom remote-listening deployments, a forged `Host: 127.0.0.1` previously passed the guard.
 - Kill targets must belong to the DSH host tree. Unattributed processes no longer show a kill entry, and the server rejects them as well.
 - Tree kills are refused when the target's descendants include protected PIDs (whitelisted or part of the own process chain); previously such a PID was terminated as collateral.
 - When the service runs on HTTP default port 80, same-origin Origins omitting the port (e.g. `http://127.0.0.1`) are no longer misjudged as cross-origin.

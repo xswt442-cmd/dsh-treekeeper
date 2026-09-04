@@ -77,3 +77,59 @@ test('host registers the guarded TreeKeeper API and releases it on disposal', as
   disposeCleanup()
   assert.equal(released, true)
 })
+
+test('RC1 Connection rejection is final for the TreeKeeper API', async () => {
+  let route
+  apply({
+    webServer: { port: 3080, register(value) { route = value; return () => {} } },
+    inject(names, mount) {
+      if (names.includes('connection')) {
+        mount({ connection: { requestRejection: () => 401 }, on() {} })
+      }
+    },
+    effect(fn) { fn() }
+  })
+  const res = responseCapture()
+  await route.handler({
+    url: '/dsh-treekeeper/api?action=history',
+    method: 'GET',
+    headers: { host: '127.0.0.1' },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, res)
+  assert.equal(res.writes[0].status, 401)
+  assert.equal(res.writes[1].body.code, 'unauthorized')
+})
+
+test('request close aborts the descendant traversal signal', async () => {
+  let route
+  let close
+  let observedSignal
+  apply({
+    webServer: { port: 3080, register(value) { route = value; return () => {} } },
+    subagents: {
+      listDescendants(_root, signal) {
+        observedSignal = signal
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+        })
+      }
+    },
+    effect(fn) { fn() }
+  })
+  const res = responseCapture()
+  res.once = (event, fn) => { if (event === 'close') close = fn }
+  res.off = () => {}
+  const pending = route.handler({
+    url: '/dsh-treekeeper/api?action=subagents&rootSessionId=root-1',
+    method: 'GET',
+    headers: {},
+    socket: { remoteAddress: '127.0.0.1' },
+    once() {},
+    off() {}
+  }, res)
+  await Promise.resolve()
+  close()
+  await pending
+  assert.equal(observedSignal.aborted, true)
+  assert.equal(res.writes.length, 0, 'an aborted response must not write an error body')
+})

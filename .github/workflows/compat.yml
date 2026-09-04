@@ -52,10 +52,11 @@ jobs:
           if ($shared -notmatch [regex]::Escape("VERSION = '$($pkg.version)'")) { Write-Error 'lib/shared.js VERSION does not match package version' }
 
   boot-check:
-    name: boot DSH Web with bundle (${{ matrix.os }})
+    name: boot DSH Web with bundle (${{ matrix.os }}, dsh${{ matrix.dsh-spec }})
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest]
+        dsh-spec: ['@0.1.2-rc.1', '@latest']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -63,7 +64,7 @@ jobs:
         with:
           node-version: 24
       - name: install DSH
-        run: npm i -g @deepseek-ai/dsh
+        run: npm i -g "@deepseek-ai/dsh${{ matrix.dsh-spec }}"
       - name: register bundle into a temporary profile
         if: runner.os == 'Windows'
         shell: pwsh
@@ -103,7 +104,9 @@ jobs:
           $globalRoot = (& npm root -g).Trim()
           $dshBin = Join-Path $globalRoot '@deepseek-ai\dsh\lib\bin.js'
           if (-not (Test-Path $dshBin)) { throw "dsh bin not found at $dshBin" }
-          $process = Start-Process -FilePath (Get-Command node).Source -ArgumentList "`"$dshBin`"", 'web', '--port', '3129' -WindowStyle Hidden -PassThru
+          $launchOut = Join-Path $env:RUNNER_TEMP 'dsh-launch.out.log'
+          $launchErr = Join-Path $env:RUNNER_TEMP 'dsh-launch.err.log'
+          $process = Start-Process -FilePath (Get-Command node).Source -ArgumentList "`"$dshBin`"", '--profile', 'web', '--no-open', '--port', '3129' -RedirectStandardOutput $launchOut -RedirectStandardError $launchErr -WindowStyle Hidden -PassThru
           try {
             $ready = $false
             for ($i = 0; $i -lt 60; $i++) {
@@ -116,14 +119,32 @@ jobs:
             }
             if (-not $ready) { throw 'dsh web did not become ready' }
 
+            $launchText = (Get-Content $launchOut -Raw -ErrorAction SilentlyContinue) + (Get-Content $launchErr -Raw -ErrorAction SilentlyContinue)
+            $launchUrl = [regex]::Match($launchText, 'http://127\.0\.0\.1:3129/\?token=[^\s\)]+').Value
+            $cookieJar = Join-Path $env:RUNNER_TEMP 'dsh-cookies.txt'
+            $shellFile = Join-Path $env:RUNNER_TEMP 'dsh-shell.html'
+            $cookieArgs = @()
+            if ($launchUrl) {
+              & curl.exe -s -L --noproxy '*' -c $cookieJar $launchUrl -o $shellFile
+              if ($LASTEXITCODE -ne 0) { throw 'failed to exchange launch token for browser cookie' }
+              $cookieArgs = @('-b', $cookieJar)
+            } else {
+              & curl.exe -fsS --noproxy '*' 'http://127.0.0.1:3129/' -o $shellFile
+            }
+
             $base = 'http://127.0.0.1:3129/dsh-treekeeper/api'
-            $snapshot = Invoke-RestMethod -Uri "${base}?action=snapshot" -TimeoutSec 20
+            $snapshot = (& curl.exe -s --noproxy '*' @cookieArgs "${base}?action=snapshot") | ConvertFrom-Json
             if (-not $snapshot.ok -or $null -eq $snapshot.processes) { throw 'snapshot returned an unexpected payload' }
-            $client = Invoke-WebRequest -Uri 'http://127.0.0.1:3129/plugins/dsh-treekeeper/client.js' -UseBasicParsing -TimeoutSec 5
-            if ($client.StatusCode -ne 200) { throw 'client bundle was not served' }
+            $shellHtml = Get-Content $shellFile -Raw
+            $advertised = [regex]::Match($shellHtml, '["''](/?plugins/[^"'']*dsh-treekeeper/client\.js[^"'']*)["'']')
+            if (-not $advertised.Success) { throw 'shell did not advertise the client bundle' }
+            $bundlePath = [System.Net.WebUtility]::HtmlDecode($advertised.Groups[1].Value)
+            if (-not $bundlePath.StartsWith('/')) { $bundlePath = "/$bundlePath" }
+            $clientCode = & curl.exe -s -o NUL -w '%{http_code}' --noproxy '*' @cookieArgs "http://127.0.0.1:3129$bundlePath"
+            if ($clientCode -ne '200') { throw 'advertised client bundle was not served' }
 
             function ApiCode([string]$method, [string]$url, [string[]]$curlArgs = @()) {
-              & curl.exe -s -o NUL -w '%{http_code}' --noproxy '*' -X $method @curlArgs $url
+              & curl.exe -s -o NUL -w '%{http_code}' --noproxy '*' -X $method @cookieArgs @curlArgs $url
             }
             if ((ApiCode GET "${base}?action=kill") -ne '405') { throw 'guard regression: GET kill must be 405' }
             if ((ApiCode POST "${base}?action=kill" @('-H', 'Origin: https://evil.example', '-d', '{"pid":1,"seenCreatedMs":1}')) -ne '403') { throw 'guard regression: foreign Origin must be 403' }
@@ -142,7 +163,7 @@ jobs:
         run: |
           set -euo pipefail
           dsh_bin="$(npm root -g)/@deepseek-ai/dsh/lib/bin.js"
-          node "$dsh_bin" web --port 3129 > "$RUNNER_TEMP/dsh.log" 2>&1 &
+          node "$dsh_bin" --profile web --no-open --port 3129 > "$RUNNER_TEMP/dsh.log" 2>&1 &
           dsh_pid=$!
           trap 'kill "$dsh_pid" 2>/dev/null || true' EXIT
           ready=false
@@ -151,8 +172,20 @@ jobs:
             sleep 1
           done
           $ready
+          launch_url=$(sed -n 's#.*\(http://127\.0\.0\.1:3129/?token=[^ )]*\).*#\1#p' "$RUNNER_TEMP/dsh.log" | head -n 1)
+          cookie_args=()
+          shell_html="$RUNNER_TEMP/dsh-shell.html"
+          if [ -n "$launch_url" ]; then
+            cookie_jar="$RUNNER_TEMP/dsh-cookies.txt"
+            curl -fsS -L --noproxy '*' -c "$cookie_jar" "$launch_url" -o "$shell_html"
+            cookie_args=(-b "$cookie_jar")
+          else
+            curl -fsS --noproxy '*' 'http://127.0.0.1:3129/' -o "$shell_html"
+          fi
           base='http://127.0.0.1:3129/dsh-treekeeper/api'
-          test "$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' "${base}?action=not-real")" = 400
-          test "$(curl --noproxy '*' -s -o /dev/null -w '%{http_code}' -H 'Origin: https://evil.example' "${base}?action=snapshot")" = 403
-          curl --noproxy '*' -fsS http://127.0.0.1:3129/plugins/dsh-treekeeper/client.js >/dev/null
+          test "$(curl --noproxy '*' "${cookie_args[@]}" -s -o /dev/null -w '%{http_code}' "${base}?action=not-real")" = 400
+          test "$(curl --noproxy '*' "${cookie_args[@]}" -s -o /dev/null -w '%{http_code}' -H 'Origin: https://evil.example' "${base}?action=snapshot")" = 403
+          bundle_path=$(grep -oE '/plugins/\?\?dsh-treekeeper/client\.js(&amp;|&)rev=[^"< ]+' "$shell_html" | head -n 1 | sed 's/&amp;/\&/g')
+          test -n "$bundle_path"
+          curl --noproxy '*' "${cookie_args[@]}" -fsS "http://127.0.0.1:3129$bundle_path" >/dev/null
           echo 'Ubuntu boot check passed (Windows-only sampler intentionally not exercised)'

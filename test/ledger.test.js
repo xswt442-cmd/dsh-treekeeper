@@ -75,12 +75,26 @@ test('job ledger mirror refreshes from onJobsChanged and ignores stale rows afte
 
 test('subagent adapter calls the mounted runtime with an explicit root', async () => {
   const calls = []
+  const controller = new AbortController()
   const result = await listSubagentTree({
-    subagents: { listDescendants: async (root) => { calls.push(root); return [{ id: 'child-1' }] } }
-  }, 'root-1')
+    subagents: { listDescendants: async (root, signal) => { calls.push([root, signal]); return [{ id: 'child-1' }] } }
+  }, 'root-1', controller.signal)
 
-  assert.deepEqual(calls, ['root-1'])
+  assert.deepEqual(calls, [['root-1', controller.signal]])
   assert.deepEqual(result, [{ id: 'child-1' }])
+})
+
+test('subagent adapter propagates cancellation instead of hiding it as unavailability', async () => {
+  const controller = new AbortController()
+  const pending = listSubagentTree({
+    subagents: {
+      listDescendants: (_root, signal) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      })
+    }
+  }, 'root-1', controller.signal)
+  controller.abort()
+  await assert.rejects(pending, /aborted/)
 })
 
 test('subagent adapter makes absent capabilities visible', async () => {

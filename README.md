@@ -55,6 +55,8 @@ Subagent 分区有三种状态：
 
 ## 安全与边界
 
+DSH 0.1.2-rc.1+ 下，浏览器 API 复用 Connection 的签名 cookie；页面关闭、刷新被替代或 HTTP 断开时，正在进行的 subagent descendant 遍历会收到取消信号。
+
 - 当前仅支持 Windows；CIM 不可用时降级为只读采样，并禁用归属与终止。
 - API 仅接受来自 loopback 对端的同源请求；网络身份由 TCP 对端地址判定（而非 Host/Origin 头），即使宿主监听 0.0.0.0，远端请求也会被拒绝；写操作仅接受 POST。
 - 终止要求 15 秒内的完整快照，并重新核验 PID 创建时间；仅 DSH 宿主树内的进程可被终止，unknown 进程仅作排查、不可终止。
