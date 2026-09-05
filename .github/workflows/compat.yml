@@ -51,6 +51,31 @@ jobs:
           $shared = Get-Content lib/shared.js -Raw
           if ($shared -notmatch [regex]::Escape("VERSION = '$($pkg.version)'")) { Write-Error 'lib/shared.js VERSION does not match package version' }
 
+  # The loopback guard helpers must stay byte-identical across the three
+  # plugins (they drifted once and all three shipped different security
+  # behaviour). Each repo carries the checker and verifies its two peers.
+  guard-parity:
+    name: shared guard parity (cross-repo)
+    runs-on: ubuntu-latest
+    steps:
+      # Uniform layout: DSH_PLUGINS_ROOT must contain the three repos as named
+      # subdirectories, so this repo also checks out under its own name.
+      - uses: actions/checkout@v5
+        with:
+          path: dsh-treekeeper
+      - uses: actions/checkout@v5
+        with:
+          repository: xswt442-cmd/dsh-instance-manager
+          path: dsh-instance-manager
+      - uses: actions/checkout@v5
+        with:
+          repository: xswt442-cmd/dsh-ballast
+          path: dsh-ballast
+      - name: compare shared guard helpers across repos
+        run: node dsh-treekeeper/scripts/guard-parity.mjs
+        env:
+          DSH_PLUGINS_ROOT: ${{ github.workspace }}
+
   boot-check:
     name: boot DSH Web with bundle (${{ matrix.os }}, dsh${{ matrix.dsh-spec }})
     strategy:
