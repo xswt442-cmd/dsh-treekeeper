@@ -73,9 +73,26 @@ test('API guard rejects a foreign Origin and a rebound non-loopback Host', () =>
   const subdomainResponse = response()
   assert.equal(guard(loopback({ host: 'api.localhost' }), subdomainResponse), false)
   assert.equal(subdomainResponse.body.code, 'non_loopback')
-  const mappedIpv6Response = response()
-  assert.equal(guard(loopback({ host: '[::ffff:127.0.0.1]:3080' }), mappedIpv6Response), false)
-  assert.equal(mappedIpv6Response.body.code, 'non_loopback')
+
+  // The IPv4-mapped IPv6 form of loopback IS loopback: a dual-stack browser
+  // reaches the panel as ::ffff:127.0.0.1, and rejecting it locked a legitimate
+  // client out of its own API. This used to assert the opposite here while
+  // instance-manager accepted it — that disagreement was the drift this suite
+  // could not see. Covered in both spellings; see scripts/guard-parity.mjs.
+  for (const host of ['[::ffff:127.0.0.1]:3080', '[::ffff:7f00:1]:3080']) {
+    const allowedResponse = response()
+    assert.equal(guard(loopback({ host }), allowedResponse), true, `${host} is loopback`)
+  }
+
+  // A Host that parses to no hostname must fail closed, not skip the allowlist.
+  // RFC 7230 requires brackets around an IPv6 literal; a client can send the
+  // unbracketed form anyway, and `hostHostname` splits it at the first colon.
+  for (const host of ['::1:3080', '::ffff:127.0.0.1:3080']) {
+    const rejectedResponse = response()
+    assert.equal(guard(loopback({ host }), rejectedResponse), false, `${host} is not a usable Host`)
+    assert.equal(rejectedResponse.status, 403)
+    assert.equal(rejectedResponse.body.code, 'non_loopback')
+  }
 })
 
 test('API guard uses strict loopback names, matching Origin ports, and bracketed IPv6', () => {
