@@ -3,6 +3,19 @@
 Release Notes 由对应版本段生成；最新版本在前。
 英文版见 [CHANGELOG.en.md](CHANGELOG.en.md)。
 
+## 0.2.3 - 2026-09-14
+
+### 安全
+
+- 同源请求守卫改由 `dsh-mini-utility-dock` 的共享片段提供。此前三仓各自维护一份 `createGuard`，已漂移三次：三家都拒绝 IPv6 回环 `::1`；三家对 Host 拼写各执一词；未加方括号的 IPv6 Host（如 `::1:3080`，RFC 7230 禁止）曾静默跳过 Host 白名单。现由单一实现判定，各仓只保留自己的错误码与文案。
+- **Origin 端口现在始终比对。** 此前未配置 `currentPort` 时该比对被跳过，任意端口的服务都会接受 `Origin: http://localhost:3080`。这是收紧，不放宽任何请求。
+- IPv4-mapped IPv6 回环（`::ffff:127.0.0.1` 与 URL 解析器规范化后的 `::ffff:7f00:1`）在 Host 与 Origin 两条路径上均视为回环。
+- Host 头存在但解析不出主机名时按非回环处理。此前该情形会跳过白名单校验。
+
+### 变更
+
+- 新增 `loopback:sync` / `loopback:check` 与 `guard:sync` / `guard:check` 脚本，用于同步并校验 `lib/shared.js` 中的两个生成片段；`npm test` 会校验其未漂移。
+
 ## 0.2.2 - 2026-09-04
 
 ### 变更
