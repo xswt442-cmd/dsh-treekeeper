@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createGuard, hasVerifiedCreationTime, parseCimDate, isLoopbackAddress } from '../lib/shared.js'
+import { treekeeperGuard, hasVerifiedCreationTime, parseCimDate, isLoopbackAddress } from '../lib/shared.js'
 
 function response() {
   return {
@@ -34,7 +34,7 @@ test('isLoopbackAddress folds real loopback forms and fails closed', () => {
 })
 
 test('API guard accepts loopback and rejects browser cross-site requests', () => {
-  const guard = createGuard()
+  const guard = treekeeperGuard()
   const allowedResponse = response()
   const rejectedResponse = response()
 
@@ -48,7 +48,12 @@ test('API guard accepts loopback and rejects browser cross-site requests', () =>
 // but it raised the request surface of the client, so the origin/host/site
 // checks must stay airtight across every axis they already enforce.
 test('API guard rejects a foreign Origin and a rebound non-loopback Host', () => {
-  const guard = createGuard()
+  // The port is stated because the shared guard always compares an Origin's port
+  // against the server's; the previous treekeeper-local copy skipped that check
+  // when no port was configured, which admitted `http://localhost:3080` to a
+  // server on any other port. dsh-instance-manager always compared, and now all
+  // three do.
+  const guard = treekeeperGuard({ currentPort: () => 3080 })
 
   for (const origin of ['https://evil.example', 'https://127.0.0.1.evil.example', 'http://localhost.evil.example']) {
     const rejectedResponse = response()
@@ -96,7 +101,7 @@ test('API guard rejects a foreign Origin and a rebound non-loopback Host', () =>
 })
 
 test('API guard uses strict loopback names, matching Origin ports, and bracketed IPv6', () => {
-  const guard = createGuard({ currentPort: () => 3080 })
+  const guard = treekeeperGuard({ currentPort: () => 3080 })
   for (const host of ['evil.localhost:3080', '[::1]:3080']) {
     const res = response()
     assert.equal(guard(loopback({ host }), res), host.startsWith('evil') ? false : true)
@@ -113,7 +118,7 @@ test('API guard uses strict loopback names, matching Origin ports, and bracketed
 })
 
 test('API guard rejects a non-loopback TCP peer regardless of spoofed headers', () => {
-  const guard = createGuard({ currentPort: () => 3080 })
+  const guard = treekeeperGuard({ currentPort: () => 3080 })
   // Forged loopback Host + same-origin metadata, but the real peer is remote.
   const spoofed = response()
   assert.equal(
@@ -129,7 +134,7 @@ test('API guard rejects a non-loopback TCP peer regardless of spoofed headers', 
 })
 
 test('API guard allows loopback TCP peers including IPv6 loopback forms', () => {
-  const guard = createGuard({ currentPort: () => 3080 })
+  const guard = treekeeperGuard({ currentPort: () => 3080 })
   for (const addr of ['127.0.0.1', '::1', '::ffff:127.0.0.1']) {
     const res = response()
     assert.equal(
@@ -140,7 +145,7 @@ test('API guard allows loopback TCP peers including IPv6 loopback forms', () => 
 })
 
 test('API guard fails closed when the peer address is missing or empty', () => {
-  const guard = createGuard({ currentPort: () => 3080 })
+  const guard = treekeeperGuard({ currentPort: () => 3080 })
   const cases = [
     { headers: { host: '127.0.0.1:3080' } }, // no socket at all
     { headers: { host: '127.0.0.1:3080' }, socket: {} }, // socket but no remoteAddress
@@ -157,7 +162,7 @@ test('API guard fails closed when the peer address is missing or empty', () => {
 })
 
 test('API guard accepts a same-origin Origin on the default HTTP port (80)', () => {
-  const guard = createGuard({ currentPort: () => 80 })
+  const guard = treekeeperGuard({ currentPort: () => 80 })
   // http://127.0.0.1 has no explicit port; WHATWG URL normalizes .port to '',
   // so the comparison must fall back to the protocol's default port.
   const res = response()
