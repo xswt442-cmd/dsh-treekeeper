@@ -23,6 +23,12 @@
   `npm run loopback:sync` / `npm run guard:sync` (either maintains both blocks),
   never the blocks themselves. The guard block depends on the loopback block, so
   keep that order.
+- `npm test` verifies both blocks against the dock version this repo pins
+  (`loopback:check` / `guard:check`). That is what makes the three plugins hold
+  identical blocks, so keep the pin exact and in step with the sibling repos.
+- `scripts/guard-parity.mjs` is a local diagnostic, not a CI gate. Run it with
+  `DSH_PLUGINS_ROOT` when all three checkouts share a branch; the property it
+  asserts cannot hold while a peer sits on a different branch.
 - Access optional DSH services only inside `ctx.inject(...)` callbacks.
 - Treat `lib/act.js`, process allowlists, and creation-time guards as safety-critical. Never broaden termination without tests.
 - Keep finding confidence, scope, source, and rule values consistent across the host, client, and agent tools.
