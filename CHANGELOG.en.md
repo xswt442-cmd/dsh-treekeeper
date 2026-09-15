@@ -5,7 +5,7 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
 ## 0.2.4 - 2026-09-16
 
-### Changed
+### Maintenance
 
 - No user-visible functional or behavioural change: this release is repository maintenance only.
 
