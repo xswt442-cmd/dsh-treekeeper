@@ -7,7 +7,7 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
 ### Maintenance
 
-- No user-visible functional or behavioural change: this release is repository maintenance only.
+- The shared-fragment CI check now runs in this repository (`loopback:check` / `guard:check`) instead of comparing across repositories.
 
 ## 0.2.3 - 2026-09-14
 
