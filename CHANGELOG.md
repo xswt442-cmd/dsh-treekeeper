@@ -28,8 +28,6 @@ Release Notes 由对应版本段生成；最新版本在前。
 - 适配 DSH 0.1.2-rc.1：浏览器 API 复用 Connection 签名 cookie，拒绝结果不会回退到旧 loopback 守卫。
 - descendant 查询现在接收 HTTP 与浏览器 refresh 的取消信号；新刷新、关闭面板或断开请求会停止旧遍历。
 - 接入 DSH 全局 locale，运行中切换语言会同步刷新面板、会话入口与 Dock 标签。
-- 删除 RC1 中不存在且从未使用的 `interruptAgent` 动态导入 helper；兼容检查显式覆盖 `0.1.2-rc.1` 与 latest。
-- 兼容 CI 现在使用启动 token 建立签名会话、按页面声明的 URL 校验客户端 bundle，并在 Linux 上断言明确的“不支持采样”响应。
 
 ### 修复
 
@@ -44,7 +42,6 @@ Release Notes 由对应版本段生成；最新版本在前。
 
 ### 变更
 
-- Mini Utility Dock 改由 `dsh-mini-utility-dock` 在构建时同步，插件发布物仍可独立运行。
 - Dock 统一过滤外部 SVG 图标，并保留侧栏几何探测与降级定位。
 
 ## 0.2.0 - 2026-09-01
@@ -97,4 +94,4 @@ Release Notes 由对应版本段生成；最新版本在前。
 
 - 首次发布：Windows 进程采样、宿主归属与泄漏 findings。
 - 增加带创建时间校验的受控进程树终止。
-- 增加浏览器面板和核心单元测试。
+- 增加浏览器面板。

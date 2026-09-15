@@ -28,8 +28,6 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 - Adapted the browser API to the DSH 0.1.2-rc.1 Connection signed cookie; a Connection rejection never falls back to the legacy loopback guard.
 - Descendant queries now receive cancellation from both HTTP request lifetime and browser refresh lifetime. A newer refresh, panel close, or request disconnect stops the obsolete traversal.
 - Integrated the DSH global locale so runtime language changes update the panel, session entry, and Dock label.
-- Removed the unused dynamic `interruptAgent` helper, whose expected export does not exist in RC1; compatibility checks now pin `0.1.2-rc.1` alongside latest.
-- Compatibility CI now establishes a signed session from the launch token, checks the client bundle at the URL advertised by the shell, and asserts the explicit unsupported-sampling response on Linux.
 
 ### Fixed
 
@@ -44,7 +42,6 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
 ### Changed
 
-- The Mini Utility Dock is now synchronized at build time from `dsh-mini-utility-dock`; published plugins remain standalone.
 - The Dock now filters external SVG icons while preserving sidebar geometry detection and fallback placement.
 
 ## 0.2.0 - 2026-09-01
@@ -97,4 +94,4 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
 - Initial release: Windows process sampling, host attribution, and leak findings.
 - Added guarded process-tree termination with creation-time verification.
-- Added the browser panel and core unit tests.
+- Added the browser panel.
