@@ -10,15 +10,15 @@
 [![downloads](https://img.shields.io/npm/d18m/dsh-treekeeper?label=downloads&logo=npm&color=cb3837)](https://www.npmjs.com/package/dsh-treekeeper)
 [![license](https://img.shields.io/badge/license-MIT-22c55e.svg)](./LICENSE)
 
-A Windows-focused DSH process-tree reconciliation and governance plugin. It displays descendants of the current host beside the available task ledger, surfaces leaked, orphaned, and unattributed processes, and provides guarded process-tree termination.
+A Windows-focused DSH process-tree reconciliation and governance plugin. It puts the current host process tree beside the available task ledger, attributes each process to the job that created it, surfaces unattributed and orphaned processes, and provides guarded tree termination.
 
 ## Features
 
-- Sample the current DSH host tree without attributing unrelated launcher children to the host.
-- Detect duplicate commands, orphaned processes, and long-running plugin children.
-- Reconcile jobs and the selected session's subagent descendants without waking cold sessions.
-- Open the global panel from the Mini Utility Dock or focus the current session from its header.
-- Identify plugin sources from command paths and retain finding and action history.
+- Sample the current DSH host tree without attributing unrelated launcher children to the host; that section is collapsed by default, with its count badge still on the heading.
+- Attribute each process to the job that created it, with a confidence level per finding: `hard` is confirmed, `inferred` is a lead only and cannot be tree-killed.
+- Detect duplicate commands, orphaned processes, and long-running plugin children; reconcile jobs and the selected session's subagent descendants without waking cold sessions.
+- Guarded tree termination (`taskkill /T /F`): the target must belong to the DSH host tree, is re-sampled and re-checked immediately before the kill including its creation time, and the tree must contain no protected descendant, so an allowlisted PID is only annotated and never widens the kill scope. See "Safety and boundaries".
+- Open the global panel from the Mini Utility Dock or focus the current session from its header; identify plugin sources from command paths and retain finding and action history.
 
 ## Install
 

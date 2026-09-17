@@ -10,15 +10,15 @@
 [![downloads](https://img.shields.io/npm/d18m/dsh-treekeeper?label=downloads&logo=npm&color=cb3837)](https://www.npmjs.com/package/dsh-treekeeper)
 [![license](https://img.shields.io/badge/license-MIT-22c55e.svg)](./LICENSE)
 
-面向 Windows 的 DSH 进程树对账与治理插件。它将当前宿主的 OS 进程后代与可用任务账本并列展示，标出泄漏、孤儿和未归属进程，并提供受保护的进程树终止。
+面向 Windows 的 DSH 进程树对账与治理插件。它把当前宿主进程树与可用任务账本并列，把每个进程归属到创建它的任务，标出未归属与孤儿进程，并提供受保护的整树终止。
 
 ## 功能
 
-- 采样当前 DSH 宿主的进程树，避免把启动器的其他子进程误归入宿主。
-- 检测重复命令、孤儿进程和长时间运行的插件子进程。
-- 对照 jobs 与指定 session 的 subagent 后代树，不唤醒冷 session。
-- 从 Mini Utility Dock 打开全局面板，或从会话标题栏直接聚焦当前 session。
-- 从命令行路径识别插件来源，并记录 findings 与操作历史。
+- 采样当前 DSH 宿主的进程树，避免把启动器的其他子进程误归入宿主；这一分区默认收起，数量角标仍在标题上。
+- 把每个进程归属到创建它的任务，finding 带置信度：`hard` 为确证，`inferred` 仅为线索、不可树杀。
+- 检测重复命令、孤儿进程和长时间运行的插件子进程；对照 jobs 与指定 session 的 subagent 后代树，不唤醒冷 session。
+- 受保护的整树终止（`taskkill /T /F`）：目标必须属于 DSH 宿主树、在动手前重新采样复核（含创建时间）、目标树内不含受保护后代，因此白名单 PID 只用于标注，不会扩大可杀范围。详见「安全与边界」。
+- 从 Mini Utility Dock 打开全局面板，或从会话标题栏直接聚焦当前 session；从命令行路径识别插件来源，并记录 findings 与操作历史。
 
 ## 安装
 
