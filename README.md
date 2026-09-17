@@ -1,5 +1,12 @@
 # dsh-treekeeper
 
+[![npm version](https://img.shields.io/npm/v/dsh-treekeeper?color=4d6bfe&label=npm)](https://www.npmjs.com/package/dsh-treekeeper)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-treekeeper?label=downloads)](https://www.npmjs.com/package/dsh-treekeeper)
+[![DSH](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-4d6bfe)](https://github.com/deepseek-ai/deepseek-harness)
+[![platform](https://img.shields.io/badge/platform-Windows-0078d4)](https://www.npmjs.com/package/dsh-treekeeper)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-5fa04e)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
+
 [中文](./README.md) | [English](./README.en.md)
 
 [![npm](https://img.shields.io/npm/v/dsh-treekeeper)](https://www.npmjs.com/package/dsh-treekeeper)

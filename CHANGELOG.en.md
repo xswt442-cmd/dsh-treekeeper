@@ -3,6 +3,13 @@
 Release notes are generated from the matching version section; newest first.
 For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
+## 0.2.5 - 2026-09-17
+
+### Changed
+
+- "DSH host descendants" is now a collapsed disclosure like every sibling section. Those processes are already counted in the summary at the top, and the expanded list pushed the actionable sections (unattributed processes, job ledger, subagent tree) below the first screen. The count badge stays visible on the collapsed heading.
+- The README header uses one consistent badge row: npm version, downloads, DSH compatibility range, the Windows-only platform statement, Node version, and license.
+
 ## 0.2.4 - 2026-09-16
 
 ### Maintenance
