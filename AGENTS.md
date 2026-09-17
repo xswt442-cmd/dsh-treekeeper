@@ -2,39 +2,16 @@
 
 `dsh-treekeeper` is a Windows-only DSH host + web plugin. It reconciles the DSH job ledger with the OS process tree and offers guarded process-tree termination.
 
-## Workflow
-
-- Do not commit directly to `main`. Use a development branch such as `dev`.
-- Use lowercase Conventional Commit prefixes.
-- Never bypass repository hooks with `--no-verify`.
-- Keep disposable scripts and generated artifacts out of tracked source.
-- Do not link this working tree into a running DSH profile.
-- Read `RELEASING.md` only when publishing.
-
 ## Engineering
 
-- Prefer root-cause fixes to patches and workarounds.
-- Refactor when it simplifies the requested change or prevents technical debt.
-- Keep changes focused; avoid unrelated or speculative refactors.
-- Keep `package.json#version` and `lib/shared.js#VERSION` equal.
-- The two marked blocks in `lib/shared.js` are generated from
-  `dsh-mini-utility-dock`: `dsh-loopback-helpers` from `dist/loopback.js` and
-  `dsh-host-guard` from `dist/guard.js`. Edit the dock fragment and run
-  `npm run loopback:sync` / `npm run guard:sync` (either maintains both blocks),
-  never the blocks themselves. The guard block depends on the loopback block, so
-  keep that order.
-- `npm test` verifies both blocks against the dock version this repo pins
-  (`loopback:check` / `guard:check`). That is what makes the three plugins hold
-  identical blocks, so keep the pin exact and in step with the sibling repos.
-- `scripts/guard-parity.mjs` is a local diagnostic, not a CI gate. Run it with
-  `DSH_PLUGINS_ROOT` when all three checkouts share a branch; the property it
-  asserts cannot hold while a peer sits on a different branch.
-- Access optional DSH services only inside `ctx.inject(...)` callbacks.
-- Treat `lib/act.js`, process allowlists, and creation-time guards as safety-critical. Never broaden termination without tests.
-- Keep finding confidence, scope, source, and rule values consistent across the host, client, and agent tools.
-- Do not add an unverified non-Windows sampler. Report unsupported platforms explicitly.
-- Keep `README.md` / `README.en.md` and `CHANGELOG.md` / `CHANGELOG.en.md` in sync.
-- CHANGELOG entries are one or two lines: what changed, and why it matters. No implementation narrative, incident timeline, or root-cause essay.
+- Keep `package.json#version` and `lib/shared.js#VERSION` equal, and keep `README.md` / `README.en.md` and `CHANGELOG.md` / `CHANGELOG.en.md` in sync.
+- The two marked blocks in `lib/shared.js` are generated from `dsh-mini-utility-dock`. Edit the dock fragment and run `npm run loopback:sync` / `npm run guard:sync` (either maintains both blocks); never edit a block. The guard block depends on the loopback block, so keep that order.
+- `npm test` checks both blocks against the dock version this repo pins (`loopback:check` / `guard:check`).
+- `scripts/guard-parity.mjs` is a manual diagnostic, not a CI gate: what it asserts cannot hold while a sibling checkout sits on another branch.
+- Treat `lib/act.js`, the process allowlists, and the creation-time guards as safety-critical. Never widen what can be terminated without a test.
+- Keep finding confidence, scope, source, and rule values consistent across the host, the client, and the agent tools.
+- Report unsupported platforms explicitly: do not add an unverified non-Windows sampler.
+- Read optional DSH services only inside `ctx.inject(...)` callbacks.
 
 ## Verify
 
