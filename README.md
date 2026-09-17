@@ -1,17 +1,14 @@
 # dsh-treekeeper
 
-[![npm version](https://img.shields.io/npm/v/dsh-treekeeper?color=4d6bfe&label=npm)](https://www.npmjs.com/package/dsh-treekeeper)
-[![npm downloads](https://img.shields.io/npm/dm/dsh-treekeeper?label=downloads)](https://www.npmjs.com/package/dsh-treekeeper)
-[![DSH](https://img.shields.io/badge/DSH-%E2%89%A50.1.0--rc.6-4d6bfe)](https://github.com/deepseek-ai/deepseek-harness)
-[![platform](https://img.shields.io/badge/platform-Windows-0078d4)](https://www.npmjs.com/package/dsh-treekeeper)
-[![Node](https://img.shields.io/badge/node-%E2%89%A520-5fa04e)](https://nodejs.org)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](./LICENSE)
-
 [中文](./README.md) | [English](./README.en.md)
 
-[![npm](https://img.shields.io/npm/v/dsh-treekeeper)](https://www.npmjs.com/package/dsh-treekeeper)
-![DSH plugin](https://img.shields.io/badge/DSH-plugin-4d6bfe)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![DSH](https://img.shields.io/static/v1?label=DSH&message=plugin&color=4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
+[![npm](https://img.shields.io/npm/v/dsh-treekeeper?label=npm&color=4d6bfe)](https://www.npmjs.com/package/dsh-treekeeper)
+[![release](https://img.shields.io/github/v/release/xswt442-cmd/dsh-treekeeper?label=release&color=16a3a3)](https://github.com/xswt442-cmd/dsh-treekeeper/releases)
+[![DSH](https://img.shields.io/static/v1?label=DSH&message=%3E%3D0.1.0-rc.6&color=4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
+[![node](https://img.shields.io/static/v1?label=node&message=%3E%3D20&color=339933&logo=node.js&logoColor=white)](https://nodejs.org)
+[![downloads](https://img.shields.io/npm/d18m/dsh-treekeeper?label=downloads&logo=npm&color=cb3837)](https://www.npmjs.com/package/dsh-treekeeper)
+[![license](https://img.shields.io/badge/license-MIT-22c55e.svg)](./LICENSE)
 
 面向 Windows 的 DSH 进程树对账与治理插件。它将当前宿主的 OS 进程后代与可用任务账本并列展示，标出泄漏、孤儿和未归属进程，并提供受保护的进程树终止。
 

@@ -34,6 +34,7 @@
 - Keep finding confidence, scope, source, and rule values consistent across the host, client, and agent tools.
 - Do not add an unverified non-Windows sampler. Report unsupported platforms explicitly.
 - Keep `README.md` / `README.en.md` and `CHANGELOG.md` / `CHANGELOG.en.md` in sync.
+- CHANGELOG entries are one or two lines: what changed, and why it matters. No implementation narrative, incident timeline, or root-cause essay.
 
 ## Verify
 
