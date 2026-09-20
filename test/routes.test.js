@@ -133,3 +133,39 @@ test('request close aborts the descendant traversal signal', async () => {
   assert.equal(observedSignal.aborted, true)
   assert.equal(res.writes.length, 0, 'an aborted response must not write an error body')
 })
+
+// The plugin's own guard is the ONLY gate on a host that mounts no Connection
+// service, and that is a real composition: the webserver and Connection ship in
+// the same bundle today, so this fallback is what a reduced or hand-built host
+// gets. Its off-loopback-peer branch is therefore asserted here at the route,
+// where the mounted wiring decides it — a unit test on the guard alone cannot
+// show that the route still reaches it.
+test('with no Connection mounted, the route refuses an off-loopback peer itself', async () => {
+  let route = null
+  apply({
+    webServer: {
+      port: 3080,
+      register(value) { route = value; return () => { } }
+    },
+    effect(fn) { fn() }
+  })
+
+  // A real loopback socket cannot stage this peer, so the route is driven
+  // directly with a socket address no local client can have.
+  for (const query of ['action=jobs', 'action=snapshot']) {
+    const res = responseCapture()
+    await route.handler({
+      url: '/dsh-treekeeper/api?' + query,
+      method: 'GET',
+      headers: { host: '127.0.0.1:3080', origin: 'http://127.0.0.1:3080', 'sec-fetch-site': 'same-origin' },
+      socket: { remoteAddress: '203.0.113.7' }
+    }, res)
+
+    assert.equal(res.writes[0].status, 403, query + ' must not answer a remote peer')
+    assert.equal(res.writes[1].body.code, 'non_loopback_peer')
+    // The rejection must not carry the data it refused to serve.
+    for (const field of ['jobs', 'ledgerAvailability', 'processes', 'findings', 'attributedCount']) {
+      assert.ok(!(field in res.writes[1].body), 'the rejection leaks ' + field)
+    }
+  }
+})
