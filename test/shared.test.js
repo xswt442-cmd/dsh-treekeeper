@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { treekeeperGuard, hasVerifiedCreationTime, parseCimDate, isLoopbackAddress } from '../lib/shared.js'
+import path from 'node:path'
+import { treekeeperGuard, hasVerifiedCreationTime, parseCimDate, isLoopbackAddress, resolveDshHome } from '../lib/shared.js'
 
 function response() {
   return {
@@ -177,4 +178,19 @@ test('API guard accepts a same-origin Origin on the default HTTP port (80)', () 
     false
   )
   assert.equal(mismatch.body.code, 'foreign_origin')
+})
+
+// The harness home decides where this plugin's own history lands, so it is
+// resolved with the same precedence the harness itself uses — including a
+// tilde, which a plain path.join() would have made a literal directory name.
+test('resolveDshHome honours the harness precedence and never falls back to cwd', () => {
+  const homeDir = '/home/dsh-user' // (pure function: the argument is never touched)
+
+  assert.equal(resolveDshHome({ DSH_HOME: '/srv/dsh-home' }, homeDir), path.resolve('/srv/dsh-home'))
+  assert.equal(resolveDshHome({ DSH_HOME: '~/elsewhere' }, homeDir), path.resolve('/home/dsh-user/elsewhere'))
+  assert.equal(resolveDshHome({}, homeDir), path.resolve('/home/dsh-user/.dsh'))
+  for (const blank of ['', '   ', undefined]) {
+    assert.equal(resolveDshHome({ DSH_HOME: blank }, homeDir), path.resolve("/home/dsh-user/.dsh"),
+      'a blank override counts as unset')
+  }
 })
