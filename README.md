@@ -59,10 +59,11 @@ Subagent 分区有三种状态：
 
 ## 安全与边界
 
-DSH 0.1.2-rc.1+ 下，浏览器 API 复用 Connection 的签名 cookie；页面关闭、刷新被替代或 HTTP 断开时，正在进行的 subagent descendant 遍历会收到取消信号。
+DSH 0.1.0-rc.7+ 下，浏览器 API 复用 Connection 的签名 cookie；页面关闭、刷新被替代或 HTTP 断开时，正在进行的 subagent descendant 遍历会收到取消信号。
 
 - 当前仅支持 Windows；CIM 不可用时降级为只读采样，并禁用归属与终止。
-- API 仅接受来自 loopback 对端的同源请求；网络身份由 TCP 对端地址判定（而非 Host/Origin 头），即使宿主监听 0.0.0.0，远端请求也会被拒绝；写操作仅接受 POST。
+- 浏览器接口的准入由宿主挂载的 Connection 决定：带 Connection 的宿主用它的 Host/Origin 校验加签名 cookie；未挂载 Connection 的宿主才回落到本插件自己的守卫，按 TCP 对端地址、Fetch Metadata、Origin 与 loopback Host 判定。写操作仅接受 POST。
+- 本插件不单独收窄这一层。在配了 `trustedHosts` 且监听 0.0.0.0 的宿主上，能出示有效浏览器会话的远端同样可达接口，包括 `kill`；终止动作自身的护栏（快照、创建时间、归属树、受保护后代）照常生效。
 - 终止要求 15 秒内的完整快照，并重新核验 PID 创建时间；仅 DSH 宿主树内的进程可被终止，unknown 进程仅作排查、不可终止。
 - 系统关键进程、当前宿主、启动链和额外白名单 PID 不可终止。可终止范围只限 DSH 宿主归属树：额外白名单 PID 仅用于标注（它的后代仍可见但不可终止），保护一个 PID 不会扩大可杀范围。
 - 受保护后代按树杀前即时采样的进程树计算：若该树包含任一受保护 PID，整个操作被拒绝。采样之后新出现的受保护后代无法排除——`taskkill /T` 没有排除开关，这是残留的 TOCTOU 边界，不是绝对保证。

@@ -59,10 +59,11 @@ Configuration is process-local and resets on restart.
 
 ## Safety and limits
 
-On DSH 0.1.2-rc.1+, the browser API reuses the Connection signed cookie. Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal.
+On DSH 0.1.0-rc.7+, the browser API reuses the Connection signed cookie. Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal.
 
 - Windows is currently supported. If CIM is unavailable, sampling degrades to read-only and disables attribution and termination.
-- The API accepts same-origin requests only from a loopback TCP peer; network identity is decided by the peer address, not the Host/Origin headers, so a remote peer is rejected even when the host listens on 0.0.0.0; mutating actions are POST-only.
+- Admission to the browser API is decided by the Connection service the host mounts: a host that has it applies its Host/Origin fence plus the signed cookie, and only a host without it falls back to this plugin's own guard, which decides by TCP peer address, Fetch Metadata, Origin, and loopback Host. Mutating actions are POST-only either way.
+- This plugin does not narrow that layer by itself. On a host configured with `trustedHosts` and listening on 0.0.0.0, a remote peer holding a valid browser session reaches the API too, `kill` included; the guardrails of the kill action itself (snapshot, creation time, attribution tree, protected descendants) still apply.
 - Termination requires a complete snapshot no older than 15 seconds and rechecks the PID creation time; only processes inside the DSH host tree may be terminated, while unknown processes are investigation-only and cannot be killed.
 - Critical system processes, the current host, its launcher chain, and additional whitelisted PIDs cannot be terminated. Killable scope is the DSH host attribution only: an extra whitelisted PID is an attribution root for labelling, and its descendants stay visible but not killable, so protecting a PID never widens the kill scope.
 - Protected descendants are evaluated against a process tree sampled immediately before the kill: if that tree contains any protected PID the whole kill is refused. A protected descendant that appears after that sample cannot be excluded — `taskkill /T` has no exclusion switch — which is the residual TOCTOU boundary, not an absolute guarantee.
