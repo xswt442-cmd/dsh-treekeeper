@@ -46,10 +46,14 @@ test('job ledger reports whether owner-aware enumeration is available', () => {
 test('job ledger mirror refreshes from onJobsChanged and ignores stale rows after disposal', () => {
   let changed = null
   let disposed = null
+  let detached = false
   let rows = [{ id: 'bash-1', kind: 'bash', label: 'first', status: 'running' }]
   const jobs = {
     list() { return rows },
-    onJobsChanged(listener) { changed = listener }
+    // The real service binds this subscription to the jobs service's OWN
+    // context, so nothing detaches it when the consumer's fence goes away:
+    // the disposer the helper keeps is the only thing that does.
+    onJobsChanged(listener) { changed = listener; return () => { detached = true } }
   }
   const agents = { list() { return [] } }
   const ctx = {
@@ -69,6 +73,7 @@ test('job ledger mirror refreshes from onJobsChanged and ignores stale rows afte
   assert.deepEqual(ledger.list().map(row => row.id), ['bash-2'])
 
   disposed()
+  assert.equal(detached, true, 'disposal must release the change subscription too')
   rows = [{ id: 'bash-3', kind: 'bash', label: 'fallback', status: 'running' }]
   assert.deepEqual(ledger.list().map(row => row.id), ['bash-3'])
 })
