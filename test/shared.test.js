@@ -50,10 +50,9 @@ test('API guard accepts loopback and rejects browser cross-site requests', () =>
 // checks must stay airtight across every axis they already enforce.
 test('API guard rejects a foreign Origin and a rebound non-loopback Host', () => {
   // The port is stated because the shared guard always compares an Origin's port
-  // against the server's; the previous treekeeper-local copy skipped that check
+  // against the server's; a previous local copy of this guard skipped that check
   // when no port was configured, which admitted `http://localhost:3080` to a
-  // server on any other port. dsh-instance-manager always compared, and now all
-  // three do.
+  // server on any other port. The generated block compares unconditionally.
   const guard = treekeeperGuard({ currentPort: () => 3080 })
 
   for (const origin of ['https://evil.example', 'https://127.0.0.1.evil.example', 'http://localhost.evil.example']) {
@@ -82,9 +81,9 @@ test('API guard rejects a foreign Origin and a rebound non-loopback Host', () =>
 
   // The IPv4-mapped IPv6 form of loopback IS loopback: a dual-stack browser
   // reaches the panel as ::ffff:127.0.0.1, and rejecting it locked a legitimate
-  // client out of its own API. This used to assert the opposite here while
-  // instance-manager accepted it — that disagreement was the drift this suite
-  // could not see. Covered in both spellings; see scripts/guard-parity.mjs.
+  // client out of its own API. This used to assert the opposite here — the
+  // disagreement a local copy of the guard could not see. Covered in both
+  // spellings; see scripts/guard-parity.mjs.
   for (const host of ['[::ffff:127.0.0.1]:3080', '[::ffff:7f00:1]:3080']) {
     const allowedResponse = response()
     assert.equal(guard(loopback({ host }), allowedResponse), true, `${host} is loopback`)
