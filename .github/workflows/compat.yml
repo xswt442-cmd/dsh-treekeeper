@@ -174,9 +174,16 @@ jobs:
               & curl.exe -s -o NUL -w '%{http_code}' --noproxy '*' -X $method @cookieArgs @curlArgs $url
             }
             if ((ApiCode GET "${base}?action=kill") -ne '405') { throw 'guard regression: GET kill must be 405' }
-            if ((ApiCode POST "${base}?action=kill" @('-H', 'Origin: https://evil.example', '-d', '{"pid":1,"seenCreatedMs":1}')) -ne '403') { throw 'guard regression: foreign Origin must be 403' }
-            if ((ApiCode GET "${base}?action=snapshot" @('-H', 'sec-fetch-site: cross-site')) -ne '403') { throw 'guard regression: cross-site metadata must be 403' }
-            if ((ApiCode GET "${base}?action=snapshot" @('-H', 'Host: rebound.example')) -ne '403') { throw 'guard regression: non-loopback Host must be 403' }
+            # The three header checks below assert the DEPLOYED request fence, not this plugin's
+            # own embedded guard: a host that mounts the Connection service fences with its
+            # Host/Origin rule plus the signed browser cookie, and the embedded guard only
+            # runs where no Connection service is mounted. Keep them as end-to-end assertions
+            # of the boundary a caller actually reaches; the guard itself is covered by the
+            # unit tests (and, for the no-Connection route, by the route-level test).
+
+            if ((ApiCode POST "${base}?action=kill" @('-H', 'Origin: https://evil.example', '-d', '{"pid":1,"seenCreatedMs":1}')) -ne '403') { throw 'the deployed API must reject a foreign Origin (403)' }
+            if ((ApiCode GET "${base}?action=snapshot" @('-H', 'sec-fetch-site: cross-site')) -ne '403') { throw 'the deployed API must reject a cross-site request (403)' }
+            if ((ApiCode GET "${base}?action=snapshot" @('-H', 'Host: rebound.example')) -ne '403') { throw 'the deployed API must reject a rebound Host (403)' }
             if ((ApiCode GET "${base}?action=not-real") -ne '400') { throw 'unknown action must be 400' }
             Write-Host 'compat check passed'
           } finally {
