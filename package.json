@@ -31,22 +31,6 @@
       "platform": "web"
     }
   },
-  "dshhub": {
-    "schemaVersion": 1,
-    "displayName": "treekeeper",
-    "summary": "账本↔OS 对账引擎：对照当前 DSH 宿主任务账本与本机真实进程树，标出未归属、泄漏与孤儿进程，守卫式（创建时间预检+白名单）树杀，插件级常驻子进程审计。",
-    "categories": ["dev", "Web UI"],
-    "surfaces": ["host", "web"],
-    "capabilities": {},
-    "compatibility": {
-      "dsh": ">=0.1.0-rc.6",
-      "node": ">=20"
-    },
-    "permissions": {
-      "network": ["http://127.0.0.1:*"],
-      "os": ["process-list", "process-terminate"]
-    }
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/xswt442-cmd/dsh-treekeeper.git"

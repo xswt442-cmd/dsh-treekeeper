@@ -56,7 +56,7 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
 ### Changed
 
-- The Dock fragment is synchronized from `dsh-mini-utility-dock`; published plugins remain standalone.
+- The Dock fragment is now embedded from an external fragment package at build time; published plugins remain standalone.
 - The Dock now filters external SVG icons while preserving sidebar geometry detection and fallback placement.
 
 ## 0.2.0 - 2026-09-01
