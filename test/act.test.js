@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validateKillTarget, validateKillOwnership, killTree, classifyKillOutcome } from '../lib/act.js'
+import { validateKillTarget, validateKillOwnership, killTree, classifyKillOutcome, decideKillEntry, decideKillConfirm } from '../lib/act.js'
 import { attribute } from '../lib/attribute.js'
 
 const liveNode = { alive: true, createdMs: 1000, name: 'node.exe' }
@@ -21,6 +21,42 @@ test('kill outcome treats an unreadable creation time as a survivor, not a reuse
   // Alive at the same pid but provably a different process: the pid was reused
   // before the probe, which is what a successful tree kill looks like.
   assert.deepEqual(classifyKillOutcome(100, { alive: true, createdMs: 999 }), { ok: true, code: 'gone_reused' })
+})
+
+test('kill entry refuses anything the snapshot cannot vouch for', () => {
+  const procs = [{ pid: 200, ppid: 1, name: 'node', cmdline: 'node', createdMs: 100, wsBytes: 0 }]
+  const snapshot = { procs, degraded: false }
+  const attribution = { 200: { rootLabel: 'harness' } }
+  const base = { pid: 200, seenCreatedMs: 100, snapshot, takenAt: 1000, now: 1100, maxAgeMs: 15000, attribution }
+
+  // The only path that may proceed: fresh snapshot, matching creation time, and
+  // a pid the host tree owns.
+  assert.deepEqual(decideKillEntry(base), { ok: true })
+
+  // Every way to be refused. None of them may reach taskkill, and all of them
+  // are covered here rather than only on Windows.
+  const refused = (over, code) => {
+    assert.equal(decideKillEntry({ ...base, ...over }).code, code)
+  }
+  refused({ snapshot: null }, 'snapshot_required')
+  refused({ snapshot: { procs, degraded: true } }, 'snapshot_required')
+  refused({ now: 1000 + 15001 }, 'snapshot_required')
+  refused({ pid: 999 }, 'snapshot_required')
+  refused({ seenCreatedMs: Number.NaN }, 'snapshot_required')
+  refused({ seenCreatedMs: 999 }, 'snapshot_required')
+  // Present in the snapshot but outside the host tree (the `unknown` bucket),
+  // or owned by something that is not the harness.
+  refused({ attribution: {} }, 'unattributed')
+  refused({ attribution: { 200: { rootLabel: 'unknown' } } }, 'non_harness_root')
+})
+
+test('kill confirm refuses a target the pre-pull sample cannot re-identify', () => {
+  const fresh = { procs: [{ pid: 200, createdMs: 100 }], degraded: false }
+  assert.deepEqual(decideKillConfirm({ pid: 200, seenCreatedMs: 100, fresh }), { ok: true })
+  assert.equal(decideKillConfirm({ pid: 200, seenCreatedMs: 100, fresh: null }).code, 'snapshot_required')
+  assert.equal(decideKillConfirm({ pid: 200, seenCreatedMs: 100, fresh: { procs: [], degraded: true } }).code, 'snapshot_required')
+  assert.equal(decideKillConfirm({ pid: 999, seenCreatedMs: 100, fresh }).code, 'snapshot_required')
+  assert.equal(decideKillConfirm({ pid: 200, seenCreatedMs: 999, fresh }).code, 'snapshot_required')
 })
 
 test('kill policy rejects a target without a verifiable creation time', () => {

@@ -11,6 +11,25 @@ function responseCapture() {
   }
 }
 
+/**
+ * Minimal POST request for the routes that read a JSON body. `readBody` reads
+ * `pid`/`seenCreatedMs` from the body, not the query string, so a caller that
+ * wants to reach the kill gates has to send one.
+ */
+function postWith(body, url) {
+  return {
+    url,
+    method: 'POST',
+    headers: { host: '127.0.0.1' },
+    socket: { remoteAddress: '127.0.0.1' },
+    on(event, cb) {
+      if (event === 'data') queueMicrotask(() => cb(Buffer.from(JSON.stringify(body))))
+      if (event === 'end') queueMicrotask(() => cb())
+      return this
+    }
+  }
+}
+
 test('host registers the guarded TreeKeeper API and releases it on disposal', async () => {
   let route = null
   let disposeCleanup = null
@@ -168,4 +187,35 @@ test('with no Connection mounted, the route refuses an off-loopback peer itself'
       assert.ok(!(field in res.writes[1].body), 'the rejection leaks ' + field)
     }
   }
+})
+
+test('the kill route refuses before any OS call when the request or the snapshot is not ready', async () => {
+  let route
+  apply({
+    webServer: { port: 3080, register(value) { route = value; return () => {} } },
+    effect(fn) { fn() }
+  })
+
+  // The method gate answers before the body is read: a GET can never terminate.
+  const getRes = responseCapture()
+  await route.handler({
+    url: '/dsh-treekeeper/api?action=kill&pid=1',
+    method: 'GET',
+    headers: { host: '127.0.0.1' },
+    socket: { remoteAddress: '127.0.0.1' }
+  }, getRes)
+  assert.equal(getRes.writes[0].status, 405)
+
+  // No snapshot has been taken in this profile, so the entry gate refuses and
+  // taskkill is never reached. The pid is one no live process can hold, so a
+  // gate that silently stopped working would fail this assertion instead of
+  // terminating the test runner.
+  const postRes = responseCapture()
+  await route.handler(postWith({ pid: 999999, seenCreatedMs: 1 }, '/dsh-treekeeper/api?action=kill'), postRes)
+  assert.equal(postRes.writes[0].status, 409)
+  assert.deepEqual(postRes.writes[1].body, {
+    ok: false,
+    code: 'snapshot_required',
+    error: 'refresh a complete process snapshot before terminating'
+  })
 })
