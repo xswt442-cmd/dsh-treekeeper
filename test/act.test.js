@@ -23,6 +23,25 @@ test('kill outcome treats an unreadable creation time as a survivor, not a reuse
   assert.deepEqual(classifyKillOutcome(100, { alive: true, createdMs: 999 }), { ok: true, code: 'gone_reused' })
 })
 
+test('a failed probe must refuse, never read as already-gone or killed', () => {
+  // pidFacts reports query failures as { alive:false, error } — the same shape
+  // as a clean "not found" except for the error field. The policy gate must
+  // tell them apart: a transient PowerShell failure on a live target may not
+  // read as a successful no-op.
+  const facts = { alive: false, createdMs: null, name: null, error: 'spawn blocked' }
+  assert.equal(
+    validateKillTarget({ pid: 200, seenCreatedMs: 100, facts, whitelistPids: new Set() }).code,
+    'verify_failed'
+  )
+
+  // Same for the post-kill probe: taskkill has already run, so a failed
+  // recheck must read as failure, never as `killed`.
+  assert.deepEqual(
+    classifyKillOutcome(100, { alive: false, createdMs: null, error: 'spawn blocked' }),
+    { ok: false, code: 'verify_failed', detail: 'spawn blocked' }
+  )
+})
+
 test('kill entry refuses anything the snapshot cannot vouch for', () => {
   const procs = [{ pid: 200, ppid: 1, name: 'node', cmdline: 'node', createdMs: 100, wsBytes: 0 }]
   const snapshot = { procs, degraded: false }
