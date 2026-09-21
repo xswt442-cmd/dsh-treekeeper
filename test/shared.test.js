@@ -83,7 +83,7 @@ test('API guard rejects a foreign Origin and a rebound non-loopback Host', () =>
   // reaches the panel as ::ffff:127.0.0.1, and rejecting it locked a legitimate
   // client out of its own API. This used to assert the opposite here — the
   // disagreement a local copy of the guard could not see. Covered in both
-  // spellings; see scripts/guard-parity.mjs.
+  // spellings; see the parity bin.
   for (const host of ['[::ffff:127.0.0.1]:3080', '[::ffff:7f00:1]:3080']) {
     const allowedResponse = response()
     assert.equal(guard(loopback({ host }), allowedResponse), true, `${host} is loopback`)
