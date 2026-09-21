@@ -1,9 +1,27 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { validateKillTarget, validateKillOwnership, killTree } from '../lib/act.js'
+import { validateKillTarget, validateKillOwnership, killTree, classifyKillOutcome } from '../lib/act.js'
 import { attribute } from '../lib/attribute.js'
 
 const liveNode = { alive: true, createdMs: 1000, name: 'node.exe' }
+
+test('kill outcome treats an unreadable creation time as a survivor, not a reuse', () => {
+  // pidFacts falls back to createdMs:null when the CIM JSON does not parse. The
+  // pid is alive and we cannot prove it is a different process, so the kill must
+  // not be reported as successful.
+  assert.deepEqual(classifyKillOutcome(100, { alive: true, createdMs: null }), {
+    ok: false,
+    code: 'still_alive',
+    detail: 'process survived taskkill /T /F'
+  })
+  // Alive with the creation time we verified: still the same process.
+  assert.equal(classifyKillOutcome(100, { alive: true, createdMs: 100 }).ok, false)
+  // Gone.
+  assert.deepEqual(classifyKillOutcome(100, { alive: false, createdMs: null }), { ok: true, code: 'killed' })
+  // Alive at the same pid but provably a different process: the pid was reused
+  // before the probe, which is what a successful tree kill looks like.
+  assert.deepEqual(classifyKillOutcome(100, { alive: true, createdMs: 999 }), { ok: true, code: 'gone_reused' })
+})
 
 test('kill policy rejects a target without a verifiable creation time', () => {
   const result = validateKillTarget({ pid: 42, seenCreatedMs: null, facts: liveNode, selfPid: 1 })
