@@ -3,6 +3,20 @@
 Release notes are generated from the matching version section; newest first.
 For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
+## 0.3.0 - 2026-09-23
+
+### Fixed
+
+- Two fail-open holes in the kill path: extracting the gates dropped the sample binding, so an authorized kill always threw and answered 500; and a failed probe read as "already gone" or "killed" — one hole on each side of taskkill. Both now fail closed.
+- An empty CIM reply is treated as degradation: a live machine never samples zero processes, and the empty result used to render as a healthy, empty machine with no hint.
+- History append and rotation are serialized: the background poll and concurrent kills both append, and interleaving could drop a line.
+- Background sampling failures leave a log line; they used to be swallowed, letting the snapshot go stale while the panel showed nothing.
+
+### Changed
+
+- The kill gates are pure functions (`decideKillEntry` / `decideKillConfirm`), so all eight refusal paths are covered on every platform.
+- The declared minimum DSH version is now `>=0.1.2-rc.1` (was `>=0.1.0-rc.6`; CI never covered it).
+
 ## 0.2.6 - 2026-09-17
 
 ### Maintenance
