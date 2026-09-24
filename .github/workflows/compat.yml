@@ -259,12 +259,17 @@ jobs:
           grep -q 'only Windows sampling is implemented' "$snapshot_file" || { echo '::error::Linux snapshot did not report the documented platform limit'; exit 1; }
           test "$(curl --noproxy '*' "${cookie_args[@]}" -s -o /dev/null -w '%{http_code}' "${base}?action=not-real")" = 400
           test "$(curl --noproxy '*' "${cookie_args[@]}" -s -o /dev/null -w '%{http_code}' -H 'Origin: https://evil.example' "${base}?action=snapshot")" = 403
-          bundle_path=$(grep -oE '/plugins/[^"< ]*dsh-treekeeper/client\.js[^"< ]*' "$shell_html" | head -n 1 | sed 's/&amp;/\&/g' || true)
+          # 0.1.7 advertises the roster entry as `plugins/??<name>/client.js&rev=…`
+          # — no leading slash, and the preload list packs every name into one
+          # `??` URL. Excluding the comma from the prefix keeps that combined URL
+          # from matching; the per-entry URL is the one that can be fetched.
+          bundle_path=$(grep -oE '/?plugins/[^"< ,]*dsh-treekeeper/client\.js[^"< ]*' "$shell_html" | head -n 1 | sed 's/&amp;/\&/g' || true)
           if [ -z "$bundle_path" ]; then
             echo '::error::shell did not advertise the dsh-treekeeper client bundle' >&2
             print_dsh_log
             exit 1
           fi
+          case "$bundle_path" in /*) ;; *) bundle_path="/$bundle_path" ;; esac
           bundle_code=$(curl --noproxy '*' "${cookie_args[@]}" -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:3129$bundle_path" || true)
           if [ "$bundle_code" != 200 ]; then
             echo "::error::advertised client bundle failed: HTTP $bundle_code ($bundle_path)" >&2
