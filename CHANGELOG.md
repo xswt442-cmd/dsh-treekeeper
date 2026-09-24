@@ -3,6 +3,12 @@
 Release Notes 由对应版本段生成；最新版本在前。
 英文版见 [CHANGELOG.en.md](CHANGELOG.en.md)。
 
+## Unreleased
+
+### 变更
+
+- 最低支持 DSH 版本提高到 `0.1.5-rc.3`；兼容矩阵改为固定检查该基线和 `0.1.7-rc.1`。
+
 ## 0.3.0 - 2026-09-23
 
 ### 修复

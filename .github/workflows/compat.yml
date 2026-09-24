@@ -59,11 +59,12 @@ jobs:
   boot-check:
     name: boot DSH Web with bundle (${{ matrix.os }}, dsh${{ matrix.dsh-spec }})
     strategy:
+      fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest]
-        # Keep the oldest declared RC line explicit while validating the new
-        # release candidate independently from the moving latest channel.
-        dsh-spec: ['@0.1.2-rc.1', '@0.1.5-rc.1', '@latest']
+        # Cover the new minimum, the 0.1.7 API line, and the moving latest
+        # channel. `@latest` is a canary; explicit versions are stable anchors.
+        dsh-spec: ['@0.1.5-rc.3', '@0.1.7-rc.1', '@latest']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
