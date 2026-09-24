@@ -91,11 +91,12 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
     on() {}
   })
 
-  // Four registrations: this plugin's row in the family menu, the family launcher
+  // Six registrations: this plugin's row in the family menu, the family launcher
   // it claims when it loads first (reached through inject, because that seat
-  // belongs to the shell), the overlay panel, and the session-scope header action.
-  assert.deepEqual(injected, ['createhelper.utility.item', 'shell.overlay', 'shell.overlay', 'conversation.session.header.actions'])
-  assert.equal(registered.length, 4)
+  // belongs to the shell), the overlay panel, the session-scope header action,
+  // and the two DTK-M3 ambient Session-row seats.
+  assert.deepEqual(injected, ['createhelper.utility.item', 'shell.overlay', 'shell.overlay', 'conversation.session.header.actions', 'sidebar.session.row.leading', 'sidebar.session.row.hover'])
+  assert.equal(registered.length, 6)
   assert.equal(registered[0].options.name, 'createhelper.utility.item')
   assert.equal(registered[0].options.id, 'treekeeper')
   assert.equal(registered[0].options.order, 20)
@@ -110,6 +111,14 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
   assert.equal(registered[3].options.name, 'conversation.session.header.actions')
   assert.equal(registered[3].options.id, 'treekeeper-open')
   assert.equal(typeof registered[3].render, 'function')
+  assert.equal(registered[4].options.name, 'sidebar.session.row.leading')
+  assert.equal(registered[4].options.id, 'treekeeper')
+  assert.equal(registered[4].options.order, 20)
+  assert.equal(typeof registered[4].render, 'function')
+  assert.equal(registered[5].options.name, 'sidebar.session.row.hover')
+  assert.equal(registered[5].options.id, 'treekeeper')
+  assert.equal(registered[5].options.order, 20)
+  assert.equal(typeof registered[5].render, 'function')
   assert.equal(localeNamespace, 'dsh-treekeeper')
   // The retired page-local dock is what floated its own container over the
   // composer; the host's overlay layer holds the launcher now, so nothing may

@@ -12,6 +12,8 @@
 - Keep finding confidence, scope, source, and rule values consistent across the host, the client, and the agent tools.
 - Report unsupported platforms explicitly: do not add an unverified non-Windows sampler.
 - Read optional DSH services only inside `ctx.inject(...)` callbacks.
+- The supported DSH floor lives in three places and must agree: the README badge, `engines.dsh`, and `peerDependencies['@deepseek-ai/dsh']` (marked optional in `peerDependenciesMeta` so npm never installs the host because of it). DSH's startup preflight compares that peer against the running version with prereleases included and disables the row when it does not match, and the only override is an exact-version `dsh plugin allow-version` exemption. The range carries no upper bound on purpose: a ceiling would disable this plugin on the host's next release, and the exemption path accepts an exact version only.
+- The ambient `sidebar.session.row.*` occupants read only cached client facts and never cause a host read: the leading cell mounts on every idle row, so a fetch, a session binding, or a subscription there would turn a passive badge into per-row host work.
 
 ## Verify
 

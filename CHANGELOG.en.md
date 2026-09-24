@@ -7,6 +7,7 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
 ### Changed
 
+- Adopt the two sidebar Session-row seats DSH `0.1.7-rc.2` adds: `sidebar.session.row.leading` paints a 12px glyph on an idle row whose session TreeKeeper already has a cached fact for (an empty cache leaves the cell blank), and `sidebar.session.row.hover` adds a one-line cached summary plus a "View this session in TreeKeeper" entry to the row's hover card. Both read only the module-level cache the panel fills when it loads a snapshot: no host call, no session binding, so no idle row is sampled or woken. The hover entry works with an empty cache too — that is the path that discovers an unknown session.
 - The panel launcher becomes the family's shared launcher: one 30px icon at the bottom-left of the work area (the host's `shell.overlay` layer, positioned by the sidebar's right edge + 16, 80 while the shell has not laid the column out) that opens a menu listing the three panels. The assembly comes from the new `dsh-utility-launcher` fragment in `dsh-mini-utility-dock` (maintained here with `launcher:sync` / `launcher:check`, which `npm test` runs), and this plugin only contributes its own row; the page-level dock protocol is gone, the old `dock:sync` / `dock:check` for `client.js` with it, and the panel position no longer follows that fragment's measured left offset but is pinned to the frame's top-right corner.
 - Raise the minimum supported DSH version to `0.1.5-rc.3`; the compatibility matrix now pins this baseline and `0.1.7-rc.1`.
 

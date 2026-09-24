@@ -18,7 +18,7 @@ A Windows-focused DSH process-tree reconciliation and governance plugin. It puts
 - Attribute each process to the job that created it, with a confidence level per finding: `hard` is confirmed, `inferred` is a lead only and cannot be tree-killed.
 - Detect duplicate commands, orphaned processes, and long-running plugin children; reconcile jobs and the selected session's subagent descendants without waking cold sessions.
 - Guarded tree termination (`taskkill /T /F`): the target must belong to the DSH host tree, is re-sampled and re-checked immediately before the kill including its creation time, and the tree must contain no protected descendant, so an allowlisted PID is only annotated and never widens the kill scope. See "Safety and boundaries".
-- Open the global panel from the family menu at the bottom-left of the work area (one icon, three panels), or focus the current session from its header; identify plugin sources from command paths and retain finding and action history.
+- Open the global panel from the family menu at the bottom-left of the work area (one icon, three panels), or focus the current session from its header; sidebar Session rows also show the cached per-session facts (a small glyph in an idle row's leading cell, a one-line summary and focus entry in its hover card). Identify plugin sources from command paths and retain finding and action history.
 
 ## Install
 
@@ -46,6 +46,8 @@ The subagent section has three states:
 | `unavailable` | The current DSH build does not expose subagents |
 
 The session-header entry always supplies an explicit session; the global entry never guesses the current selection.
+
+Once the panel has loaded a snapshot, the facts attributable to a specific session (that session's subagent descendants, the running jobs it owns, and the findings the ledger join links to it) enter a client-side cache and appear on the sidebar's Session rows: an idle row's leading cell shows a small glyph, and its hover card shows a one-line summary plus "View this session in TreeKeeper". Both occupants read only that cache, issue no host read, and never wake or sample a session from an idle row. Unattributed processes, ownerless jobs, and the host process list cannot be attributed to a session and therefore never appear on a row.
 
 ## Configuration
 
