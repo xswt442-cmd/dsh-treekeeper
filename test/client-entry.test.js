@@ -86,7 +86,7 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
         return
       }
       assert.deepEqual(Array.from(services), ['slots'])
-      mount({ slots })
+      mount({ slots, on() {} })
     },
     on() {}
   })

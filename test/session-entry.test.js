@@ -131,7 +131,7 @@ test('the client exposes the three-state decision and root resolution for the pa
   const plugin = definition.factory(() => ({ createElement: () => null }))
   plugin.apply({
     get() {},
-    inject(services, mount) { mount({ slots: { inject() {}, register() {} } }) },
+    inject(services, mount) { mount({ slots: { inject() {}, register() {} }, on() {} }) },
     on() {}
   })
 
@@ -193,7 +193,7 @@ test('the session header action hands the slot sessionId to the panel and the ho
   }
   plugin.apply({
     get() {},
-    inject(services, mount) { mount({ slots }) },
+    inject(services, mount) { mount({ slots, on() {} }) },
     on() {}
   })
 
@@ -249,7 +249,7 @@ function panelBoot(data, focusSessionId) {
   }
   plugin.apply({
     get() {},
-    inject(services, mount) { mount({ slots }) },
+    inject(services, mount) { mount({ slots, on() {} }) },
     on() {}
   })
 

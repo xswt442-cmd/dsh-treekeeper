@@ -115,7 +115,7 @@ function boot(data) {
   }
   plugin.apply({
     get() {},
-    inject(services, mount) { mount({ slots }) },
+    inject(services, mount) { mount({ slots, on() {} }) },
     on() {}
   })
 

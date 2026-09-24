@@ -163,7 +163,7 @@ function boot({ runEffects = false } = {}) {
   }
   plugin.apply({
     get() { assert.fail('the client must wait for slots instead of probing it once') },
-    inject(services, mount) { mount({ slots }) },
+    inject(services, mount) { mount({ slots, on() {} }) },
     on() {}
   })
   return { plugin, react, registered, injected, fetches }
