@@ -3,7 +3,7 @@
 Release Notes 由对应版本段生成；最新版本在前。
 英文版见 [CHANGELOG.en.md](CHANGELOG.en.md)。
 
-## 0.3.1 - 2026-09-25
+## 0.3.2 - 2026-09-25
 
 ### 变更
 
@@ -11,6 +11,7 @@ Release Notes 由对应版本段生成；最新版本在前。
 - 面板入口改用 `dsh-mini-utility-dock` 的共享 launcher 片段：左下角一个图标，点开是列出三个面板的菜单；页面级 dock 协议与 `dock:sync` / `dock:check` 退役，面板改为固定在右上角。
 - 最低支持 DSH 版本提高到 `0.1.5-rc.3`；兼容矩阵改为固定检查该基线与 0.1.7 线。
 - 声明对宿主的兼容性：`peerDependencies` 与 `engines.dsh` 都要求 `>=0.1.5-rc.3`，peer 标 optional 以免 npm 去装宿主。宿主启动预检不满足时会禁用本插件，此前没有声明就无从判断。
+- 修复热重载后族图标消失：launcher 归属随 `dsh-mini-utility-dock` 0.5.1 改为可释放的认领，owner 销毁即唤醒其余副本注册，不再需要刷新整页。
 
 ## 0.3.0 - 2026-09-23
 

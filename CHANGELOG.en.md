@@ -3,7 +3,7 @@
 Release notes are generated from the matching version section; newest first.
 For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
-## 0.3.1 - 2026-09-25
+## 0.3.2 - 2026-09-25
 
 ### Changed
 
@@ -11,6 +11,7 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 - The panel entry becomes `dsh-mini-utility-dock`'s shared launcher fragment: one icon at the bottom-left opens a menu of the three panels; the page-local dock protocol and `dock:sync` / `dock:check` are retired, and the panel is pinned to the frame's top-right.
 - Raise the minimum supported DSH version to `0.1.5-rc.3`; the compatibility matrix now pins this baseline and the 0.1.7 line.
 - Declare host compatibility: `peerDependencies` and `engines.dsh` both require `>=0.1.5-rc.3`, with the peer marked optional so npm never installs the host. The host's startup preflight disables a plugin whose peer does not match; declaring none left it with nothing to judge.
+- Fix the family launcher disappearing after a hot reload: synced from `dsh-mini-utility-dock` 0.5.1, whose claim is released with its owner so the other copies register again without a full page reload.
 
 ## 0.3.0 - 2026-09-23
 
