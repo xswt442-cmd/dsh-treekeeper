@@ -9,7 +9,8 @@ Release Notes 由对应版本段生成；最新版本在前。
 
 - 采纳 DSH `0.1.7-rc.2` 新开的两个侧栏会话行 seat：`sidebar.session.row.leading` 在该行空闲且 TreeKeeper 已缓存此 session 的事实时显示一个 12px 图标（无缓存则整格留空），`sidebar.session.row.hover` 在悬浮卡片里给出一行缓存摘要，并提供「在 TreeKeeper 中查看此会话」入口。两者只读面板加载快照时写入的模块级缓存，不发起任何宿主调用、不建立 session 绑定，因此不会为每个空闲行采样或唤醒 session；悬浮入口在缓存为空时同样可用，这是发现未知 session 的路径。
 - 面板入口改为族的共享 launcher：页面左下角一个 30px 图标（宿主 `shell.overlay` 浮层，位置按「侧边栏右缘 + 16」，壳层未布局时退 80px），点开是列出三个面板的菜单。装配来自 `dsh-mini-utility-dock` 的新片段 `dsh-utility-launcher`（本仓以 `launcher:sync` / `launcher:check` 维护，并进入 `npm test`），本插件只投出自己那一行；页面级 dock 协议整体退役，原先针对 `client.js` 的 `dock:sync` / `dock:check` 随之删除，面板位置从跟随该片段测量的左偏移改为固定在右上角。
-- 最低支持 DSH 版本提高到 `0.1.5-rc.3`；兼容矩阵改为固定检查该基线和 `0.1.7-rc.1`。
+- 最低支持 DSH 版本提高到 `0.1.5-rc.3`；兼容矩阵改为固定检查该基线与 0.1.7 线。
+- 补齐对宿主的兼容性声明：`peerDependencies` 加上 `@deepseek-ai/dsh: >=0.1.5-rc.3`（在 `peerDependenciesMeta` 里标 optional，npm 不会因此去装宿主），`engines.dsh` 用同一范围，兼容矩阵的 0.1.7 锚点从 rc.1 抬到 rc.2。0.1.7 起的启动预检会拿 `peerDependencies` 里的 `@deepseek-ai/dsh*` 与运行版本（含 prerelease）比较，不满足就把该行**禁用**，只有 `dsh plugin allow-version` 的精确版本豁免能放行——此前本插件一个 peer 都没声明，用户跑在不支持的宿主上不会得到任何提示。范围只写下限、不设上限：宿主是 developer preview，写死上限会在它下次发版时把我们自己的插件禁掉，而豁免只认精确版本。
 
 ## 0.3.0 - 2026-09-23
 

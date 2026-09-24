@@ -64,7 +64,7 @@ jobs:
         os: [windows-latest, ubuntu-latest]
         # Cover the new minimum, the 0.1.7 API line, and the moving latest
         # channel. `@latest` is a canary; explicit versions are stable anchors.
-        dsh-spec: ['@0.1.5-rc.3', '@0.1.7-rc.1', '@latest']
+        dsh-spec: ['@0.1.5-rc.3', '@0.1.7-rc.2', '@latest']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
