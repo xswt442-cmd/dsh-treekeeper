@@ -202,8 +202,27 @@ jobs:
           dsh_pid=$!
           trap 'kill "$dsh_pid" 2>/dev/null || true' EXIT
           print_dsh_log() {
-            echo '--- dsh log (launch token redacted) ---' >&2
-            sed -E 's/([?&]token=)[^&[:space:]]+/\1[redacted]/g' "$RUNNER_TEMP/dsh.log" >&2 || true
+            local found=false log_file bytes error_types
+            if kill -0 "$dsh_pid" 2>/dev/null; then
+              echo 'dsh process: alive' >&2
+            else
+              echo 'dsh process: exited' >&2
+            fi
+            for log_file in "$RUNNER_TEMP/dsh.log" "$DSH_HOME"/launcher/logs/server-3129.*.log; do
+              [ -f "$log_file" ] || continue
+              found=true
+              bytes=$(wc -c < "$log_file" | tr -d ' ')
+              printf 'dsh log file: %s (%s bytes)\n' "${log_file##*/}" "$bytes" >&2
+              error_types=$(grep -Eo '(TypeError|ReferenceError|SyntaxError|RangeError|EvalError|URIError|Error):' "$log_file" | sort -u | tr '\n' ' ' || true)
+              [ -z "$error_types" ] || printf 'dsh error types: %s\n' "$error_types" >&2
+            done
+            if [ "$found" = false ]; then
+              echo 'no DSH log files found in the runner temp or launcher log directory' >&2
+            fi
+            if [ -f "$shell_html" ]; then
+              echo 'client bundle paths in returned HTML:' >&2
+              grep -oE '/plugins/[A-Za-z0-9_./@+-]*client\.js' "$shell_html" | sort -u >&2 || true
+            fi
           }
           ready=false
           for _ in $(seq 1 60); do
