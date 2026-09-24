@@ -201,14 +201,17 @@ jobs:
           node "$dsh_bin" --profile web --no-open --port 3129 > "$RUNNER_TEMP/dsh.log" 2>&1 &
           dsh_pid=$!
           trap 'kill "$dsh_pid" 2>/dev/null || true' EXIT
+          print_dsh_log() {
+            echo '--- dsh log (launch token redacted) ---' >&2
+            sed -E 's/([?&]token=)[^&[:space:]]+/\1[redacted]/g' "$RUNNER_TEMP/dsh.log" >&2 || true
+          }
           ready=false
           for _ in $(seq 1 60); do
             if curl --noproxy '*' -sS --max-time 2 -o /dev/null http://127.0.0.1:3129/; then ready=true; break; fi
             sleep 1
           done
           if ! $ready; then
-            echo '--- dsh log ---' >&2
-            cat "$RUNNER_TEMP/dsh.log" >&2 || true
+            print_dsh_log
             exit 1
           fi
           cookie_jar="$RUNNER_TEMP/dsh-cookies.txt"
@@ -224,7 +227,7 @@ jobs:
             [ "$shell_code" = 200 ] && { shell_ready=1; break; }
             sleep 1
           done
-          [ "$shell_ready" = 1 ] || { echo "::error::web shell authentication failed: HTTP $shell_code (launch token announced: $token_announced)"; cat "$RUNNER_TEMP/dsh.log"; exit 1; }
+          [ "$shell_ready" = 1 ] || { echo "::error::web shell authentication failed: HTTP $shell_code (launch token announced: $token_announced)"; print_dsh_log; exit 1; }
           cookie_args=(-b "$cookie_jar")
           base='http://127.0.0.1:3129/dsh-treekeeper/api'
           snapshot_file="$RUNNER_TEMP/treekeeper-snapshot.json"
@@ -238,7 +241,15 @@ jobs:
           test "$(curl --noproxy '*' "${cookie_args[@]}" -s -o /dev/null -w '%{http_code}' "${base}?action=not-real")" = 400
           test "$(curl --noproxy '*' "${cookie_args[@]}" -s -o /dev/null -w '%{http_code}' -H 'Origin: https://evil.example' "${base}?action=snapshot")" = 403
           bundle_path=$(grep -oE '/plugins/[^"< ]*dsh-treekeeper/client\.js[^"< ]*' "$shell_html" | head -n 1 | sed 's/&amp;/\&/g' || true)
-          [ -n "$bundle_path" ] || { echo '::error::shell did not advertise the dsh-treekeeper client bundle'; exit 1; }
+          if [ -z "$bundle_path" ]; then
+            echo '::error::shell did not advertise the dsh-treekeeper client bundle' >&2
+            print_dsh_log
+            exit 1
+          fi
           bundle_code=$(curl --noproxy '*' "${cookie_args[@]}" -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:3129$bundle_path" || true)
-          [ "$bundle_code" = 200 ] || { echo "::error::advertised client bundle failed: HTTP $bundle_code ($bundle_path)"; exit 1; }
+          if [ "$bundle_code" != 200 ]; then
+            echo "::error::advertised client bundle failed: HTTP $bundle_code ($bundle_path)" >&2
+            print_dsh_log
+            exit 1
+          fi
           echo 'Ubuntu boot check passed (Windows-only sampler intentionally not exercised)'
