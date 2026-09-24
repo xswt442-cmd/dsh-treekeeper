@@ -5,9 +5,9 @@
   "type": "module",
   "main": "lib/index.js",
   "scripts": {
-    "test": "npm run dock:check && npm run guard:check && npm run loopback:check && node --test test/*.test.js",
-    "dock:sync": "dsh-mini-utility-dock sync lib/client.js",
-    "dock:check": "dsh-mini-utility-dock check lib/client.js",
+    "test": "npm run launcher:check && npm run guard:check && npm run loopback:check && node --test test/*.test.js",
+    "launcher:sync": "dsh-mini-utility-dock sync lib/client.js",
+    "launcher:check": "dsh-mini-utility-dock check lib/client.js",
     "loopback:sync": "dsh-mini-utility-dock sync lib/shared.js",
     "guard:sync": "dsh-mini-utility-dock sync lib/shared.js",
     "loopback:check": "dsh-mini-utility-dock check lib/shared.js",
@@ -15,7 +15,7 @@
     "docs:check": "dsh-plugin-docs"
   },
   "devDependencies": {
-    "dsh-mini-utility-dock": "0.3.0"
+    "dsh-mini-utility-dock": "0.5.0"
   },
   "exports": {
     ".": "./lib/index.js",

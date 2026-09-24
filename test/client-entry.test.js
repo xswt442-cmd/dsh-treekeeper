@@ -91,20 +91,30 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
     on() {}
   })
 
-  // DTK-M2: two slot contributions now — the root shell.overlay panel and the
-  // session-scope header action entry.
-  assert.deepEqual(injected, ['shell.overlay', 'conversation.session.header.actions'])
-  assert.equal(registered.length, 2)
-  assert.equal(registered[0].options.name, 'shell.overlay')
-  assert.equal(registered[0].options.id, 'treekeeper-panel')
-  assert.equal(registered[0].options.order, 90)
+  // Four registrations: this plugin's row in the family menu, the family launcher
+  // it claims when it loads first (reached through inject, because that seat
+  // belongs to the shell), the overlay panel, and the session-scope header action.
+  assert.deepEqual(injected, ['createhelper.utility.item', 'shell.overlay', 'shell.overlay', 'conversation.session.header.actions'])
+  assert.equal(registered.length, 4)
+  assert.equal(registered[0].options.name, 'createhelper.utility.item')
+  assert.equal(registered[0].options.id, 'treekeeper')
+  assert.equal(registered[0].options.order, 20)
   assert.equal(typeof registered[0].render, 'function')
-  assert.equal(registered[1].options.name, 'conversation.session.header.actions')
-  assert.equal(registered[1].options.id, 'treekeeper-open')
+  assert.equal(registered[1].options.name, 'shell.overlay')
+  assert.equal(registered[1].options.id, 'utility-launcher')
   assert.equal(typeof registered[1].render, 'function')
-  const dock = context.window.__CREATEHELPER_DSH_UTILITY_DOCK_V1__
-  assert.equal(dock.protocol, 'createhelper.dsh.utility-dock')
-  assert.equal(dock.version, 1)
+  assert.equal(registered[2].options.name, 'shell.overlay')
+  assert.equal(registered[2].options.id, 'treekeeper-panel')
+  assert.equal(registered[2].options.order, 90)
+  assert.equal(typeof registered[2].render, 'function')
+  assert.equal(registered[3].options.name, 'conversation.session.header.actions')
+  assert.equal(registered[3].options.id, 'treekeeper-open')
+  assert.equal(typeof registered[3].render, 'function')
   assert.equal(localeNamespace, 'dsh-treekeeper')
-  assert.equal(dockRoot.children[0].title, 'TreeKeeper')
+  // The retired page-local dock is what floated its own container over the
+  // composer; the host's overlay layer holds the launcher now, so nothing may
+  // append a container to body again.
+  assert.equal(context.window.__CREATEHELPER_DSH_UTILITY_DOCK_V1__, undefined)
+  assert.doesNotMatch(source, /getUtilityDock|CREATEHELPER_DSH_UTILITY_DOCK/)
+  assert.equal(dockRoot, null, 'the client must not append a floating container to body')
 })

@@ -18,7 +18,7 @@ A Windows-focused DSH process-tree reconciliation and governance plugin. It puts
 - Attribute each process to the job that created it, with a confidence level per finding: `hard` is confirmed, `inferred` is a lead only and cannot be tree-killed.
 - Detect duplicate commands, orphaned processes, and long-running plugin children; reconcile jobs and the selected session's subagent descendants without waking cold sessions.
 - Guarded tree termination (`taskkill /T /F`): the target must belong to the DSH host tree, is re-sampled and re-checked immediately before the kill including its creation time, and the tree must contain no protected descendant, so an allowlisted PID is only annotated and never widens the kill scope. See "Safety and boundaries".
-- Open the global panel from the Mini Utility Dock or focus the current session from its header; identify plugin sources from command paths and retain finding and action history.
+- Open the global panel from the family menu at the bottom-left of the work area (one icon, three panels), or focus the current session from its header; identify plugin sources from command paths and retain finding and action history.
 
 ## Install
 
@@ -42,7 +42,7 @@ The subagent section has three states:
 | State | Meaning |
 | --- | --- |
 | `available` | Shows the selected session's complete descendant tree |
-| `root-required` | Opened from the Dock without a selected session |
+| `root-required` | Opened from the panel launcher without a selected session |
 | `unavailable` | The current DSH build does not expose subagents |
 
 The session-header entry always supplies an explicit session; the global entry never guesses the current selection.

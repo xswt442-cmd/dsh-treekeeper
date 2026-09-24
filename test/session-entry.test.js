@@ -220,12 +220,11 @@ test('the session header action hands the slot sessionId to the panel and the ho
 function panelBoot(data, focusSessionId) {
   const react = makeFakeReact()
   const registered = []
-  let dockRoot = null
   const context = {
     console: { warn() {} },
     navigator: { language: 'en-US' },
     document: {
-      body: { appendChild(value) { dockRoot = value } },
+      body: { appendChild() {} },
       documentElement: { dataset: {}, style: { setProperty() {} } },
       head: { appendChild() {} },
       createElement: makeElement,
@@ -255,17 +254,27 @@ function panelBoot(data, focusSessionId) {
   })
 
   // Focus the panel the way the header entry does: the entry itself opens the
-  // panel, so only the no-focus case needs the dock button. Clicking the dock
+  // panel, so only the no-focus case needs the launcher. Clicking the launcher
   // while the panel is already open would close it, which is the real toggle.
   if (focusSessionId) {
     plugin._tkTest.focusSession(focusSessionId)
   } else {
-    const dockButton = dockRoot.children.find((child) => child.dataset.createhelperDockItem === 'treekeeper')
-    dockButton.listeners.click[0]()
+    const launcher = registered.find((entry) => entry.options.id === 'utility-launcher')
+    assert.ok(launcher, 'the family launcher must register on the shell overlay layer')
+    const launcherButton = allNodes(renderNode(launcher.render({ wide: true }), react), (node) => node.type === 'button')[0]
+    assert.ok(launcherButton, 'the launcher must render a button')
+    launcherButton.props.onClick()
+    const item = registered.find((entry) => entry.options.id === 'treekeeper')
+    assert.ok(item, 'this plugin must contribute a row to the family menu')
+    const menuRow = allNodes(renderNode(item.render({ wide: true }), react), (node) => node.type === 'button')[0]
+    assert.ok(menuRow, 'the row must render a button')
+    menuRow.props.onClick()
   }
   react._seed(2, data)
   react._seed(4, false)
-  const panel = allNodes(renderNode(registered[0].render(), react), (node) => node.props?.className === 'tk-panel')
+  const panelEntry = registered.find((entry) => entry.options.id === 'treekeeper-panel')
+  assert.ok(panelEntry, 'the panel must register on the overlay layer')
+  const panel = allNodes(renderNode(panelEntry.render(), react), (node) => node.props?.className === 'tk-panel')
   assert.equal(panel.length, 1)
   return panel[0]
 }

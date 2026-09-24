@@ -14,8 +14,8 @@ const MCP = 'cmd /c npx -y @upstash/context7-mcp'
 /**
  * Minimal fake React: enough hooks for TreeKeeperSurface plus an element
  * walker, so the Panel tree can be inspected without a DOM. Hook slots are
- * reset per component invocation, which is exact for this bundle because only
- * the surface component uses hooks.
+ * reset per component invocation, so the launcher's hooks stay separate from
+ * the surface's.
  */
 let fakeReact = null
 function makeFakeReact() {
@@ -71,7 +71,6 @@ function textOf(node) {
 function boot(data) {
   const react = makeFakeReact()
   let definition = null
-  let dockRoot = null
   const registered = []
   const makeElement = () => ({
     style: { setProperty() {} },
@@ -91,7 +90,7 @@ function boot(data) {
     console: { warn() {} },
     navigator: { language: 'en-US' },
     document: {
-      body: { appendChild(value) { dockRoot = value } },
+      body: { appendChild() {} },
       documentElement: { dataset: {}, style: { setProperty() {} } },
       head: { appendChild() {} },
       createElement: makeElement,
@@ -120,13 +119,24 @@ function boot(data) {
     on() {}
   })
 
-  // Open the panel the way a user does: click the dock item, then render the
-  // slot surface by hand (effects are skipped, so no fetch happens).
+  // Open the panel the way a user does: render the sidebar-footer launcher,
+  // click it, then render the panel surface by hand (effects are skipped, so no
+  // fetch happens).
   react._seed(2, data)
   react._seed(4, false)
-  const dockButton = dockRoot.children.find((child) => child.dataset.createhelperDockItem === 'treekeeper')
-  dockButton.listeners.click[0]()
-  const surface = () => renderNode(registered[0].render())
+  const launcher = registered.find((entry) => entry.options.id === 'utility-launcher')
+  assert.ok(launcher, 'the family launcher must register on the shell overlay layer')
+  const launcherButton = allNodes(renderNode(launcher.render({ wide: true })), (node) => node.type === 'button')[0]
+  assert.ok(launcherButton, 'the launcher must render a button')
+  launcherButton.props.onClick()
+  const item = registered.find((entry) => entry.options.id === 'treekeeper')
+  assert.ok(item, 'this plugin must contribute a row to the family menu')
+  const menuRow = allNodes(renderNode(item.render({ wide: true })), (node) => node.type === 'button')[0]
+  assert.ok(menuRow, 'the row must render a button')
+  menuRow.props.onClick()
+  const panel = registered.find((entry) => entry.options.id === 'treekeeper-panel')
+  assert.ok(panel, 'the panel must register on the overlay layer')
+  const surface = () => renderNode(panel.render())
   return { surface }
 }
 

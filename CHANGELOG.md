@@ -7,6 +7,7 @@ Release Notes 由对应版本段生成；最新版本在前。
 
 ### 变更
 
+- 面板入口改为族的共享 launcher：页面左下角一个 30px 图标（宿主 `shell.overlay` 浮层，位置按「侧边栏右缘 + 16」，壳层未布局时退 80px），点开是列出三个面板的菜单。装配来自 `dsh-mini-utility-dock` 的新片段 `dsh-utility-launcher`（本仓以 `launcher:sync` / `launcher:check` 维护，并进入 `npm test`），本插件只投出自己那一行；页面级 dock 协议整体退役，原先针对 `client.js` 的 `dock:sync` / `dock:check` 随之删除，面板位置从跟随该片段测量的左偏移改为固定在右上角。
 - 最低支持 DSH 版本提高到 `0.1.5-rc.3`；兼容矩阵改为固定检查该基线和 `0.1.7-rc.1`。
 
 ## 0.3.0 - 2026-09-23

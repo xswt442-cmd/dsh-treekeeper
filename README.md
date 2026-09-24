@@ -18,7 +18,7 @@
 - 把每个进程归属到创建它的任务，finding 带置信度：`hard` 为确证，`inferred` 仅为线索、不可树杀。
 - 检测重复命令、孤儿进程和长时间运行的插件子进程；对照 jobs 与指定 session 的 subagent 后代树，不唤醒冷 session。
 - 受保护的整树终止（`taskkill /T /F`）：目标必须属于 DSH 宿主树、在动手前重新采样复核（含创建时间）、目标树内不含受保护后代，因此白名单 PID 只用于标注，不会扩大可杀范围。详见「安全与边界」。
-- 从 Mini Utility Dock 打开全局面板，或从会话标题栏直接聚焦当前 session；从命令行路径识别插件来源，并记录 findings 与操作历史。
+- 从页面左下的家族菜单（图标展开，三个面板同列）打开全局面板，或从会话标题栏直接聚焦当前 session；从命令行路径识别插件来源，并记录 findings 与操作历史。
 
 ## 安装
 
@@ -42,7 +42,7 @@ Subagent 分区有三种状态：
 | 状态 | 含义 |
 | --- | --- |
 | `available` | 显示已选 session 的完整后代树 |
-| `root-required` | 从 Dock 打开，尚未选择 session |
+| `root-required` | 从面板入口打开，尚未选择 session |
 | `unavailable` | 当前 DSH 构建未提供 subagents 能力 |
 
 会话标题栏入口始终传入明确的 session；全局入口不会猜测当前选择。
