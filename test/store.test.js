@@ -54,6 +54,26 @@ test('history store survives an unwritable target instead of breaking sampling',
   assert.ok(String(store.degraded).includes('append'), String(store.degraded))
 })
 
+// The channel split, stated without leaning on the file system: whether reading a
+// path under a non-directory answers ENOENT (no failure noted) or ENOTDIR (a read
+// failure) differs between platforms, so the ordering rule is asserted directly —
+// a lost write outranks a failed read, and a later read failure cannot hide it.
+test('a read failure cannot overwrite a write failure', (t) => {
+  t.mock.method(console, 'error', () => {})
+  // No file system involved: only the two channels and their precedence.
+  const store = new HistoryStore(path.join(os.tmpdir(), 'treekeeper-channels-only'))
+  store.noteFailure('append', { code: 'EPERM', message: 'append boom' })
+  store.noteFailure('read', { code: 'ENOTDIR', message: 'read boom' })
+  assert.match(String(store.degraded), /^append: EPERM/, String(store.degraded))
+
+  // The write channel clears on its own success, whatever the read channel says,
+  // and the read failure is then what remains — reported, not swallowed.
+  store.noteRecovered('write')
+  assert.match(String(store.degraded), /^read: ENOTDIR/, String(store.degraded))
+  store.noteRecovered('read')
+  assert.equal(store.degraded, null)
+})
+
 // The whole point of keeping the two catches: a store that cannot write and a
 // store that has nothing in it look identical from `rows: []`.
 test('a write failure is stated once, and stated again when it clears', async (t) => {
