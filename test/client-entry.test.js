@@ -91,10 +91,10 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
     on() {}
   })
 
-  // Six registrations: this plugin's row in the family menu, the family launcher
-  // it claims when it loads first (reached through inject, because that seat
-  // belongs to the shell), the overlay panel, the session-scope header action,
-  // and the two DTK-M3 ambient Session-row seats.
+  // Six registrations: this plugin's row in the launcher menu, the shared
+  // launcher it claims when it loads first (reached through inject, because that
+  // seat belongs to the shell), the overlay panel, the session-scope header
+  // action, and the two DTK-M3 ambient Session-row seats.
   assert.deepEqual(injected, ['createhelper.utility.item', 'shell.overlay', 'shell.overlay', 'conversation.session.header.actions', 'sidebar.session.row.leading', 'sidebar.session.row.hover'])
   assert.equal(registered.length, 6)
   assert.equal(registered[0].options.name, 'createhelper.utility.item')

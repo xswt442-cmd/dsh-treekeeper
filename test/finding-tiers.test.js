@@ -125,12 +125,12 @@ function boot(data) {
   react._seed(2, data)
   react._seed(4, false)
   const launcher = registered.find((entry) => entry.options.id === 'utility-launcher')
-  assert.ok(launcher, 'the family launcher must register on the shell overlay layer')
+  assert.ok(launcher, 'the shared launcher must register on the shell overlay layer')
   const launcherButton = allNodes(renderNode(launcher.render({ wide: true })), (node) => node.type === 'button')[0]
   assert.ok(launcherButton, 'the launcher must render a button')
   launcherButton.props.onClick()
   const item = registered.find((entry) => entry.options.id === 'treekeeper')
-  assert.ok(item, 'this plugin must contribute a row to the family menu')
+  assert.ok(item, 'this plugin must contribute a row to the launcher menu')
   const menuRow = allNodes(renderNode(item.render({ wide: true })), (node) => node.type === 'button')[0]
   assert.ok(menuRow, 'the row must render a button')
   menuRow.props.onClick()
