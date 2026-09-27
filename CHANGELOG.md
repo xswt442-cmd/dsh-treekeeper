@@ -3,24 +3,47 @@
 Release Notes 由对应版本段生成；最新版本在前。
 英文版见 [CHANGELOG.en.md](CHANGELOG.en.md)。
 
+## Unreleased
+
+### 安全
+
+- 主机侧的 JSON 应答与会话 id 校验改由嵌入的 `dsh-mini-utility-dock` 片段 `dsh-host-http` 提供，`cache-control: no-store` 从此只有一个来源。
+- Connection 授权收进片段构造的 `authorizeBrowser(req, res)`，不再散在路由里；出现过 Connection 之后的重载空档仍回 503，不降级到较弱的本地回环守卫。
+- 兜底 500 与客户端渲染不再携带原始异常文本：响应只有固定 `code`，异常原文进宿主日志。
+- 进宿主日志的请求 `action` 先折叠换行、再截断长度，一条请求伪造不出第二行日志。
+
+### 变更
+
+- 请求体的问题现在分得清：不是 JSON 对象回 400 `bad_json`，超出尺寸回 413 `body_too_large`，不再伪装成 409 `snapshot_required`。
+- `pid` 与 `pollMs` 改走显式校验：非法值不再被折叠成 `0`，越界的轮询间隔回 400 而不是被静默接受。
+- 补上进程采样（`lib/sampler.js`）的解析与降级测试：此前每道终止门都信任 `snapshot.degraded`，而它从未被测。
+- 历史存储区分「还没有记录」与「记录不了」，并按状态变化各记一条日志，不再每次轮询都记。
+
+### 维护
+
+- 兼容 CI 增加 `pull_request` 触发，Windows 格开始跑单元测试，语法检查遍历 `lib/*.js`，矩阵去掉 `@latest` 并补上 `engines.node` 下限 Node 20。
+- 发布工作流拆成 checks / npm / GitHub release 三个 job：跑本仓代码的 job 只持只读 token，tag 必须是 `main` 的祖先才能上 npm。
+- npm 包补上两份 CHANGELOG 与 `LICENSE`，`package.json` 声明 author；两份 README 的徽章行最前面放兼容 CI 徽章，`README.en.md` 一处指向不存在章节名的引用已改正。
+- `http:check` 进入 `npm test`；`check` 只比它所 pin 的 dock 认识的标记块，故新增块的存在与唯一性另由 `test/host-http.test.js` 断言。
+
 ## 0.3.2 - 2026-09-25
 
 ### 变更
 
-- 采纳 DSH `0.1.7-rc.2` 的两个侧栏会话行座位：`sidebar.session.row.leading` 在空闲行显示一个 12px 图标，`sidebar.session.row.hover` 在悬浮卡片给出一行摘要与「在 TreeKeeper 中查看此会话」入口。两者只读面板快照写入的缓存，不产生宿主请求。
-- 面板入口改用 `dsh-mini-utility-dock` 的共享 launcher 片段：左下角一个图标，点开是列出三个面板的菜单；页面级 dock 协议与 `dock:sync` / `dock:check` 退役，面板改为固定在右上角。
+- 采纳 DSH `0.1.7-rc.2` 的两个侧栏会话行座位：空闲行前导格显示一个小图标，悬浮卡片给出一行摘要与「在 TreeKeeper 中查看此会话」入口；两者只读面板写入的缓存，不产生宿主请求。
+- 面板入口改用 `dsh-mini-utility-dock` 的共享 launcher 片段：左下角一个图标点开面板菜单；页面级 dock 协议与 `dock:sync` / `dock:check` 退役，面板固定在右上角。
 - 最低支持 DSH 版本提高到 `0.1.5-rc.3`；兼容矩阵改为固定检查该基线与 0.1.7 线。
-- 声明对宿主的兼容性：`peerDependencies` 与 `engines.dsh` 都要求 `>=0.1.5-rc.3`，peer 标 optional 以免 npm 去装宿主。宿主启动预检不满足时会禁用本插件，此前没有声明就无从判断。
-- 修复热重载后族图标消失：launcher 归属随 `dsh-mini-utility-dock` 0.5.1 改为可释放的认领，owner 销毁即唤醒其余副本注册，不再需要刷新整页。
+- 声明对宿主的兼容性：`peerDependencies` 与 `engines.dsh` 都要求 `>=0.1.5-rc.3`，peer 标 optional 以免 npm 去装宿主；宿主启动预检据此决定要不要禁用本插件。
+- 修复热重载后左下角 launcher 图标消失：归属随 `dsh-mini-utility-dock` 0.5.1 改为可释放的认领，owner 销毁即唤醒其余副本注册，不再需要刷新整页。
 
 ## 0.3.0 - 2026-09-23
 
 ### 修复
 
-- kill 路径两处 fail-open：门控抽成函数时丢了采样绑定，授权 kill 必然 500；查询失败会被当作「已消失」或「已杀掉」报成功——taskkill 前后各一个口子。现在一律 fail-closed。
-- 空 CIM 回复按降级处理：活机器不可能采到零进程，此前会渲染成一台健康的空机器且无任何提示。
+- kill 路径的两处 fail-open 现在一律 fail-closed：一次授权的终止不再因缺采样而 500，采样失败也不再被报成「已消失」或「已杀掉」。
+- 空 CIM 回复按降级处理：活机器不可能采到零进程。
 - history.jsonl 的追加与轮转串行化：后台 poll 与并发 kill 都会写，交错会丢行。
-- 后台采样失败留下日志；此前被静默吞掉，快照会悄悄过期而面板毫无提示。
+- 后台采样失败留下日志，不再被静默吞掉。
 
 ### 变更
 

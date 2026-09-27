@@ -2,6 +2,7 @@
 
 [中文](./README.md) | [English](./README.en.md)
 
+[![ci](https://github.com/xswt442-cmd/dsh-treekeeper/actions/workflows/compat.yml/badge.svg?branch=main)](https://github.com/xswt442-cmd/dsh-treekeeper/actions/workflows/compat.yml)
 [![DSH](https://img.shields.io/static/v1?label=DSH&message=plugin&color=4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
 [![npm](https://img.shields.io/npm/v/dsh-treekeeper?label=npm&color=4d6bfe)](https://www.npmjs.com/package/dsh-treekeeper)
 [![release](https://img.shields.io/github/v/release/xswt442-cmd/dsh-treekeeper?label=release&color=16a3a3)](https://github.com/xswt442-cmd/dsh-treekeeper/releases)
@@ -17,8 +18,8 @@ A Windows-focused DSH process-tree reconciliation and governance plugin. It puts
 - Sample the current DSH host tree without attributing unrelated launcher children to the host; that section is collapsed by default, with its count badge still on the heading.
 - Attribute each process to the job that created it, with a confidence level per finding: `hard` is confirmed, `inferred` is a lead only and cannot be tree-killed.
 - Detect duplicate commands, orphaned processes, and long-running plugin children; reconcile jobs and the selected session's subagent descendants without waking cold sessions.
-- Guarded tree termination (`taskkill /T /F`): the target must belong to the DSH host tree, is re-sampled and re-checked immediately before the kill including its creation time, and the tree must contain no protected descendant, so an allowlisted PID is only annotated and never widens the kill scope. See "Safety and boundaries".
-- Open the global panel from the family menu at the bottom-left of the work area (one icon, three panels), or focus the current session from its header; sidebar Session rows also show the cached per-session facts (a small glyph in an idle row's leading cell, a one-line summary and focus entry in its hover card). Identify plugin sources from command paths and retain finding and action history.
+- Guarded tree termination (`taskkill /T /F`): the target must belong to the DSH host tree, is re-sampled and re-checked immediately before the kill including its creation time, and the tree must contain no protected descendant, so an allowlisted PID is only annotated and never widens the kill scope. See "Safety and limits".
+- Open the global panel from the `dsh-mini-utility-dock` launcher at the bottom-left of the work area, or focus the current session from its header; sidebar Session rows also show the cached per-session facts (a small glyph in an idle row's leading cell, a one-line summary and focus entry in its hover card). Identify plugin sources from command paths and retain finding and action history.
 
 ## Install
 
