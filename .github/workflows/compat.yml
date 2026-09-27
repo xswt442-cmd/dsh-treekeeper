@@ -40,7 +40,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
-          cache: 'npm'
+          # No `cache: npm`: this repository tracks no lockfile on purpose (see .gitignore),
+          # and setup-node hard-fails its cache step when one is absent.
       - name: install development dependencies
         # Not `npm ci`: this repository ships no lockfile on purpose (see
         # .gitignore — pinning devDependency tarballs would say nothing about the
@@ -113,7 +114,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-          cache: 'npm'
+          # No `cache: npm`: this repository tracks no lockfile on purpose (see .gitignore),
+          # and setup-node hard-fails its cache step when one is absent.
       - name: install development dependencies
         run: npm install --ignore-scripts
       # The Windows cell is the only place the Windows-only logic actually runs,
@@ -122,6 +124,12 @@ jobs:
       # sampler and the kill gates are driven through their injected seams.
       - name: unit tests on the platform this plugin samples
         if: runner.os == 'Windows'
+        # `shell: bash` because `npm test` passes `test/*.test.js`: cmd and
+        # PowerShell hand that pattern through verbatim, and glob support in the
+        # test runner postdates the `engines.node` floor, so under the default
+        # shell this step would fail for a reason that has nothing to do with the
+        # code under test.
+        shell: bash
         run: npm test
       - name: install DSH
         run: npm i -g "@deepseek-ai/dsh${{ matrix.dsh-spec }}"
