@@ -47,7 +47,7 @@ Two gates stop a tag before npm sees it: the tag must name
    - `package.json#version`
    - `lib/shared.js#VERSION`
    - the changelogs: turn `## Unreleased` into `## X.Y.Z - YYYY-MM-DD` in both
-     `CHANGELOG.md` and `CHANGELOG.en.md`. Keep that heading format exactly —
+     `docs/CHANGELOG.md` and `docs/CHANGELOG.en.md`. Keep that heading format exactly —
      `scripts/release-notes.mjs` finds the section by matching it, and
      `test/version.test.js` fails when a changelog has no section for the version
      being shipped.

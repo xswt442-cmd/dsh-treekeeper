@@ -1,7 +1,7 @@
 name: publish
 
 # A release is created by bumping package.json + the VERSION constant in
-# lib/shared.js, writing the matching CHANGELOG.md section, then tagging
+# lib/shared.js, writing the matching docs/CHANGELOG.md section, then tagging
 # vX.Y.Z and pushing the tag. The tag must point at a commit that is already on
 # `main`: the tag is what this workflow publishes, so the tag is what has to have
 # been reviewed and run through CI first.
