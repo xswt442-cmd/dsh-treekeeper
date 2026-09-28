@@ -1,6 +1,6 @@
 {
   "name": "dsh-treekeeper",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "DSH 运行时进程树对账与治理：把当前宿主的任务账本与本机真实进程树对账，标出未归属/泄漏/孤儿进程并守卫式树杀。Runtime process-tree reconciliation for DeepSeek Harness: join the current host's job ledger with the live OS process tree, surface unattributed/leaked/orphaned children, and kill trees behind creation-time guards.",
   "type": "module",
   "main": "lib/index.js",
@@ -14,10 +14,10 @@
     "loopback:check": "dsh-mini-utility-dock check lib/shared.js",
     "guard:check": "dsh-mini-utility-dock check lib/shared.js",
     "http:check": "dsh-mini-utility-dock check lib/shared.js",
-    "docs:check": "dsh-plugin-docs"
+    "docs:check": "dsh-plugin-docs --config docs.config.mjs"
   },
   "devDependencies": {
-    "dsh-mini-utility-dock": "0.6.0"
+    "dsh-mini-utility-dock": "0.7.0"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh": ">=0.1.5-rc.3"
@@ -64,8 +64,8 @@
     "cordis.patch.yml",
     "README.md",
     "README.en.md",
-    "CHANGELOG.md",
-    "CHANGELOG.en.md",
+    "docs/CHANGELOG.md",
+    "docs/CHANGELOG.en.md",
     "LICENSE"
   ],
   "engines": {
