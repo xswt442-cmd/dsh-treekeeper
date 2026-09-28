@@ -2,6 +2,7 @@
 
 [中文](./README.md) | [English](./README.en.md)
 
+[![ci](https://github.com/xswt442-cmd/dsh-treekeeper/actions/workflows/compat.yml/badge.svg?branch=main)](https://github.com/xswt442-cmd/dsh-treekeeper/actions/workflows/compat.yml)
 [![DSH](https://img.shields.io/static/v1?label=DSH&message=plugin&color=4D6BFE)](https://github.com/deepseek-ai/deepseek-harness)
 [![npm](https://img.shields.io/npm/v/dsh-treekeeper?label=npm&color=4d6bfe)](https://www.npmjs.com/package/dsh-treekeeper)
 [![release](https://img.shields.io/github/v/release/xswt442-cmd/dsh-treekeeper?label=release&color=16a3a3)](https://github.com/xswt442-cmd/dsh-treekeeper/releases)
@@ -17,8 +18,8 @@
 - 采样当前 DSH 宿主的进程树，避免把启动器的其他子进程误归入宿主；这一分区默认收起，数量角标仍在标题上。
 - 把每个进程归属到创建它的任务，finding 带置信度：`hard` 为确证，`inferred` 仅为线索、不可树杀。
 - 检测重复命令、孤儿进程和长时间运行的插件子进程；对照 jobs 与指定 session 的 subagent 后代树，不唤醒冷 session。
-- 受保护的整树终止（`taskkill /T /F`）：目标必须属于 DSH 宿主树、在动手前重新采样复核（含创建时间）、目标树内不含受保护后代，因此白名单 PID 只用于标注，不会扩大可杀范围。详见「安全与边界」。
-- 从页面左下的家族菜单（图标展开，三个面板同列）打开全局面板，或从会话标题栏直接聚焦当前 session；侧栏会话行也会显示已缓存的 per-session 事实（空闲行前导格的一个小图标，悬浮卡片里的一行摘要与聚焦入口）。从命令行路径识别插件来源，并记录 findings 与操作历史。
+- 受保护的整树终止（`taskkill /T /F`）：目标必须属于 DSH 宿主树、在执行前重新采样并复核（含创建时间）、目标树内不含受保护后代，因此白名单 PID 只用于标注，不会扩大可杀范围。详见「安全与边界」。
+- 从页面左下的 `dsh-mini-utility-dock` launcher 打开全局面板，或从会话标题栏直接聚焦当前 session；侧栏会话行也会显示已缓存的 per-session 事实（空闲行前导格的一个小图标，悬浮卡片里的一行摘要与聚焦入口）。从命令行路径识别插件来源，并记录 findings 与操作历史。
 
 ## 安装
 

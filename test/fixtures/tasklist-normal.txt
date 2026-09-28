@@ -1,0 +1,6 @@
+"System Idle Process","0","Services","0","8 K"
+"System","4","Services","0","144 K"
+"svchost.exe","2784","Services","0","12,345 K"
+"dsh.exe","19000","Console","1","86,176 K"
+"node.exe","18432","Console","1","101,372 K"
+"git.exe","21008","Console","1","4,096 K"

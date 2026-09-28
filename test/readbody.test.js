@@ -37,3 +37,47 @@ test('readBody still parses a normal JSON body', async () => {
   req.emit('end')
   assert.deepEqual(await pending, { pollMs: 2000 })
 })
+
+// A swallowed parse error used to look like "no body": a truncated kill request
+// reached the gates with `{}`, answered 409 snapshot_required, and told the caller
+// to refresh a snapshot for a request that never named a pid.
+test('readBody separates a malformed body from no body', async () => {
+  const malformed = [
+    '{"pid":',
+    '{"pid":1,}',
+    'pid=1',
+    '{"pid":1}\ntrailing'
+  ]
+  for (const text of malformed) {
+    const req = new EventEmitter()
+    const pending = readBody(req)
+    req.emit('data', text)
+    req.emit('end')
+    assert.deepEqual(await pending, { parseError: true }, JSON.stringify(text))
+  }
+
+  const empty = new EventEmitter()
+  const emptyPending = readBody(empty)
+  empty.emit('end')
+  assert.deepEqual(await emptyPending, {}, 'no body is not a parse failure')
+})
+
+test('readBody rejects JSON that is not an object', async () => {
+  for (const text of ['null', '123', '"a string"', '[]', '[{"pid":1}]', 'true']) {
+    const req = new EventEmitter()
+    const pending = readBody(req)
+    req.emit('data', text)
+    req.emit('end')
+    assert.deepEqual(await pending, { parseError: true }, text)
+  }
+})
+
+test('readBody reports an overflow body without parsing it', async () => {
+  const req = new EventEmitter()
+  const pending = readBody(req)
+  req.emit('data', '{"pad":"')
+  req.emit('data', 'x'.repeat(70000))
+  assert.deepEqual(await pending, { tooLarge: true })
+  req.emit('end')
+  assert.deepEqual(await pending, { tooLarge: true }, 'a settled reader never changes its verdict')
+})
