@@ -26,6 +26,7 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 - The npm package now carries both CHANGELOGs and `LICENSE`, `package.json` declares an author, both READMEs lead their badge row with the compatibility CI badge, and a `README.en.md` link to a section name that does not exist is corrected.
 - `http:check` joined `npm test`. A check compares only the marked blocks its pinned dock knows, so the new block's presence and uniqueness are asserted by `test/host-http.test.js` too.
 
+- The dock pin rises to 0.6.0 and all four embedded blocks re-sync (the fragments' comment text changed with it), so `http:check` compares the fourth block for real.
 ## 0.3.2 - 2026-09-25
 
 ### Changed

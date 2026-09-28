@@ -26,6 +26,7 @@ Release Notes 由对应版本段生成；最新版本在前。
 - npm 包补上两份 CHANGELOG 与 `LICENSE`，`package.json` 声明 author；两份 README 的徽章行最前面放兼容 CI 徽章，`README.en.md` 一处指向不存在章节名的引用已改正。
 - `http:check` 进入 `npm test`；`check` 只比它所 pin 的 dock 认识的标记块，故新增块的存在与唯一性另由 `test/host-http.test.js` 断言。
 
+- dock pin 抬到 0.6.0，四个嵌入块重新 sync（片段注释文本随之更新）；`http:check` 自此真的比对第四块。
 ## 0.3.2 - 2026-09-25
 
 ### 变更
