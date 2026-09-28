@@ -7,26 +7,26 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
 ### Security
 
-- Host-side JSON replies and session-id validation now come from the embedded `dsh-mini-utility-dock` fragment `dsh-host-http`, so `cache-control: no-store` has a single source.
-- Connection authorization is now one `authorizeBrowser(req, res)` call built by that fragment. A reload gap after a Connection has existed still answers 503 instead of falling back to the weaker loopback guard.
-- The fallback 500 and its rendering in the panel no longer carry raw exception text: the response states a fixed `code` and the exception goes to the host log.
-- The `action` written to that host log has its line breaks folded and its length cut, so one request cannot forge a second log row.
+- Host-side JSON replies and session-id validation come from the embedded `dsh-mini-utility-dock` fragment `dsh-host-http`, so `cache-control: no-store` has a single setter.
+- Connection authorization is one `authorizeBrowser(req, res)` call built by that fragment. A reload during the window after a Connection has existed still returns 503 rather than falling back to the loopback guard.
+- The 500 response and the panel's error rendering contain a fixed `code`; the exception text goes to the host log.
+- The `action` written to that host log has its line breaks folded and its length truncated, so one request produces one log row.
 
 ### Changed
 
-- An unusable request body now gets its own refusal: one that is not a JSON object answers 400 `bad_json` and an oversized one 413 `body_too_large`, instead of the earlier 409 `snapshot_required`.
-- `pid` and `pollMs` go through explicit validation: an invalid value is no longer folded into `0`, and an out-of-bounds poll interval answers 400 instead of being accepted silently.
-- The process sampler (`lib/sampler.js`) now has parsing and degradation tests; every termination gate trusted `snapshot.degraded` while that flag was never tested.
-- The history store distinguishes "no records yet" from "cannot write", and logs once per state change instead of once per attempt.
+- An unusable request body returns a distinguishable error: a body that is not a JSON object returns 400 `bad_json`, an oversized one returns 413 `body_too_large`.
+- `pid` and `pollMs` go through explicit validation: an invalid value is not folded into `0`, and an out-of-bounds poll interval returns 400.
+- The process sampler (`lib/sampler.js`) has parsing and degradation tests, covering the `snapshot.degraded` flag the termination gates depend on.
+- The history store distinguishes an empty store from an unusable one and logs once per state change.
 
 ### Maintenance
 
-- The compatibility workflow now runs on `pull_request`, its Windows cell runs the unit tests, syntax checking walks `lib/*.js`, and the matrix drops `@latest` and adds the `engines.node` floor, Node 20.
+- The compatibility workflow runs on `pull_request`, its Windows cell runs the unit tests, syntax checking walks `lib/*.js`, and the matrix drops `@latest` and adds the `engines.node` floor, Node 20.
 - The publish workflow splits into checks / npm / GitHub release jobs: the jobs that run this repository's code hold a read-only token, and a tag must be an ancestor of `main` to reach npm.
-- The npm package now carries both CHANGELOGs and `LICENSE`, `package.json` declares an author, both READMEs lead their badge row with the compatibility CI badge, and a `README.en.md` link to a section name that does not exist is corrected.
-- `http:check` joined `npm test`. A check compares only the marked blocks its pinned dock knows, so the new block's presence and uniqueness are asserted by `test/host-http.test.js` too.
+- The npm package includes both CHANGELOGs and `LICENSE`, `package.json` declares an author, both READMEs lead their badge row with the compatibility CI badge, and a `README.en.md` link to a section name that does not exist is corrected.
+- `http:check` joined `npm test`. A check compares only the marked blocks its pinned dock knows, so the new block's presence and uniqueness are asserted by `test/host-http.test.js`.
+- The dock pin is 0.6.0 and all four embedded blocks re-synced; `http:check` covers the fourth block.
 
-- The dock pin rises to 0.6.0 and all four embedded blocks re-sync (the fragments' comment text changed with it), so `http:check` compares the fourth block for real.
 ## 0.3.2 - 2026-09-25
 
 ### Changed

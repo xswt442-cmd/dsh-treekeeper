@@ -7,26 +7,26 @@ Release Notes 由对应版本段生成；最新版本在前。
 
 ### 安全
 
-- 主机侧的 JSON 应答与会话 id 校验改由嵌入的 `dsh-mini-utility-dock` 片段 `dsh-host-http` 提供，`cache-control: no-store` 从此只有一个来源。
-- Connection 授权收进片段构造的 `authorizeBrowser(req, res)`，不再散在路由里；出现过 Connection 之后的重载空档仍回 503，不降级到较弱的本地回环守卫。
-- 兜底 500 与客户端渲染不再携带原始异常文本：响应只有固定 `code`，异常原文进宿主日志。
-- 进宿主日志的请求 `action` 先折叠换行、再截断长度，一条请求伪造不出第二行日志。
+- 主机侧 JSON 应答与会话 id 校验由嵌入的 `dsh-mini-utility-dock` 片段 `dsh-host-http` 提供，`cache-control: no-store` 只有一处设置点。
+- Connection 授权由片段构造的 `authorizeBrowser(req, res)` 承担；Connection 出现后的重载窗口仍返回 503，不回落至本地回环守卫。
+- 500 响应与客户端错误渲染只含固定 `code`，异常文本写入宿主日志。
+- 写入宿主日志的 `action` 先折叠换行再按长度截断，单条请求不产生多行日志。
 
 ### 变更
 
-- 请求体的问题现在分得清：不是 JSON 对象回 400 `bad_json`，超出尺寸回 413 `body_too_large`，不再伪装成 409 `snapshot_required`。
-- `pid` 与 `pollMs` 改走显式校验：非法值不再被折叠成 `0`，越界的轮询间隔回 400 而不是被静默接受。
-- 补上进程采样（`lib/sampler.js`）的解析与降级测试：此前每道终止门都信任 `snapshot.degraded`，而它从未被测。
-- 历史存储区分「还没有记录」与「记录不了」，并按状态变化各记一条日志，不再每次轮询都记。
+- 请求体校验返回可区分的错误：非 JSON 对象为 400 `bad_json`，超出尺寸为 413 `body_too_large`。
+- `pid` 与 `pollMs` 走显式校验：非法值不折算为 `0`，超出范围的轮询间隔返回 400。
+- 进程采样 `lib/sampler.js` 增加解析与降级测试，覆盖各终止门依赖的 `snapshot.degraded`。
+- 历史存储区分无记录与写入失败两种状态，按状态变化各记一条日志。
 
 ### 维护
 
-- 兼容 CI 增加 `pull_request` 触发，Windows 格开始跑单元测试，语法检查遍历 `lib/*.js`，矩阵去掉 `@latest` 并补上 `engines.node` 下限 Node 20。
-- 发布工作流拆成 checks / npm / GitHub release 三个 job：跑本仓代码的 job 只持只读 token，tag 必须是 `main` 的祖先才能上 npm。
-- npm 包补上两份 CHANGELOG 与 `LICENSE`，`package.json` 声明 author；两份 README 的徽章行最前面放兼容 CI 徽章，`README.en.md` 一处指向不存在章节名的引用已改正。
-- `http:check` 进入 `npm test`；`check` 只比它所 pin 的 dock 认识的标记块，故新增块的存在与唯一性另由 `test/host-http.test.js` 断言。
+- 兼容 CI 增加 `pull_request` 触发，Windows 格运行单元测试，语法检查遍历 `lib/*.js`，矩阵去掉 `@latest` 并补上 `engines.node` 下限 Node 20。
+- 发布工作流拆为 checks / npm / GitHub release 三个 job，运行本仓代码的 job 只持只读 token，tag 必须是 `main` 的祖先。
+- npm 包加入两份 CHANGELOG 与 `LICENSE`；`package.json` 声明 author；两份 README 的徽章行首位为兼容 CI 徽章，并修正 `README.en.md` 中一处指向不存在章节名的引用。
+- `http:check` 进入 `npm test`；`check` 只比对 pin 版本认识的标记块，新增块的存在与唯一性由 `test/host-http.test.js` 断言。
+- `dsh-mini-utility-dock` pin 升至 0.6.0，四个嵌入块重新 sync；`http:check` 覆盖第四个块。
 
-- dock pin 抬到 0.6.0，四个嵌入块重新 sync（片段注释文本随之更新）；`http:check` 自此真的比对第四块。
 ## 0.3.2 - 2026-09-25
 
 ### 变更
