@@ -2,14 +2,23 @@ name: publish
 
 # A release is created by bumping package.json + the VERSION constant in
 # lib/shared.js, writing the matching CHANGELOG.md section, then tagging
-# vX.Y.Z and pushing the tag. The GitHub release is cut from that CHANGELOG
-# section, with a compare link to the previous tag appended.
+# vX.Y.Z and pushing the tag. The tag must point at a commit that is already on
+# `main`: the tag is what this workflow publishes, so the tag is what has to have
+# been reviewed and run through CI first.
+# The GitHub release is cut from that CHANGELOG section, with a compare link to
+# the previous tag appended.
 # npm Trusted Publishing exchanges GitHub's OIDC identity for a publish
 # credential here; no npm token is stored in the repo.
 
 on:
   push:
     tags: ['v*']
+
+# The default for every job here is read-only on the repository. The one job that
+# needs more says so on itself, and it is the job that does not run any repository
+# code.
+permissions:
+  contents: read
 
 # Publishing must never be cancelled halfway through: a second tag landing
 # while the first is on npm would race the registry. Queue instead of cancel.
@@ -18,24 +27,42 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: publish to npm
+  # Everything that executes this repository's code runs here, and nothing here can
+  # write to the repository. That is the point of the split: `GITHUB_TOKEN` is
+  # exported into every step of a job, so a `contents: write` job that also runs
+  # `npm test` hands a repository-write credential to the code under test — which
+  # is exactly the step that runs whatever a dependency's install hook or a test
+  # fixture decides to run.
+  checks:
+    name: release checks (node ${{ matrix.node }})
     runs-on: ubuntu-latest
-    permissions:
-      contents: write # Create the matching GitHub release.
-      id-token: write # npm provenance (OIDC).
+    strategy:
+      fail-fast: false
+      matrix:
+        # The same floors `npm test` is expected to pass on, including the
+        # `engines.node` promise; a release that only works on the developer's
+        # Node is not a release. The Windows-only behaviour is not covered here —
+        # it is covered by the `compat` workflow, which has a Windows cell.
+        node: [20, 24]
     steps:
       - uses: actions/checkout@v5
         with:
-          fetch-depth: 0 # full history, so the notes can compare against the previous tag
+          # Full history, so the ancestry check below has a `main` to compare
+          # against and the release notes can compare against the previous tag.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: ${{ matrix.node }}
           registry-url: https://registry.npmjs.org
 
+      # No lockfile is tracked in this repository on purpose (see .gitignore), and
+      # both `npm ci` and setup-node's `cache: npm` resolve their input from one,
+      # so this is the install this repository can use. `--ignore-scripts` keeps a
+      # registry-side install hook from running in a job that has a token in its
+      # environment.
       - name: install development dependencies
-        run: npm install --ignore-scripts
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: tag matches package.json version
         shell: bash
@@ -47,13 +74,33 @@ jobs:
             exit 1
           fi
 
+      - name: tag points at a commit that is on main
+        shell: bash
+        run: |
+          # `push: tags` fires whoever pushed the tag, from whatever ref it sits on:
+          # without this check a tag cut on an unreviewed branch — or on a commit
+          # that was never green anywhere — would publish to npm and cut a release.
+          # Ancestry is the whole gate: the commit must be reachable from `main`,
+          # which means it went through a PR and the CI that ran on it.
+          git fetch --quiet --no-tags origin '+refs/heads/main:refs/remotes/origin/main' || {
+            echo "::error::cannot read origin/main; the release gate has nothing to compare against"
+            exit 1
+          }
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            echo "::error::tag ${GITHUB_REF_NAME} points at $(git rev-parse --short "$GITHUB_SHA"), which is not on main"
+            echo "::error::merge the release commit into main and tag it there"
+            exit 1
+          fi
+
       - name: release checks
-        id: sanity
         shell: bash
         run: |
           tag=${GITHUB_REF_NAME#v}
-          node --check lib/client.js
-          node --check lib/index.js
+          set -e
+          # Every lib file, not the two entry points: the safety-critical half of
+          # this plugin lives in act.js and sampler.js, and a syntax error there is
+          # only caught by the release if the release looks.
+          for f in lib/*.js; do node --check "$f"; done
           npm test
           npm run docs:check
           node --input-type=module -e "import('./lib/index.js').then(m => { if (!m.default || typeof m.default.apply !== 'function') process.exit(1) })"
@@ -62,6 +109,24 @@ jobs:
             exit 1
           }
           npm pack --dry-run
+
+  npm:
+    name: publish to npm
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # Nothing here writes to the repository.
+      id-token: write # npm provenance (OIDC).
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: install development dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: skip when version is already published
         id: published
@@ -80,8 +145,29 @@ jobs:
         if: steps.published.outputs.already != 'yes'
         run: npm publish --provenance --access public
 
-      - name: GitHub release from changelog (idempotent)
-        if: always() && steps.sanity.outcome == 'success'
+  # The only job with a repository-write token, and the only one that does not run
+  # code from the pull: it reads one CHANGELOG section and calls `gh`. It depends on
+  # the checks but not on the npm step, so a version published out of band — like
+  # the first one, before npm knew this package name at all — still gets its notes,
+  # and a registry hiccup does not take the release down with it.
+  release:
+    name: GitHub release from changelog
+    needs: [checks, npm]
+    if: always() && needs.checks.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Create the matching GitHub release.
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # full history, so the notes can compare against the previous tag
+
+      - name: install node for the notes script
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: GitHub release (idempotent)
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -96,10 +182,8 @@ jobs:
           else
             notes=$(printf '%s\n\n**完整变更**: [`%s`](%s/commits/%s)' "$notes" "$tag" "$repo" "$tag")
           fi
-          # Not gated on the publish step: a version published out of band — like
-          # the first one, before npm knows this package name at all — still needs
-          # its notes here. Re-running must converge rather than fail over an
-          # occupied name, so an existing release is refreshed instead.
+          # Re-running must converge rather than fail over an occupied name, so an
+          # existing release is refreshed instead.
           if gh release view "$tag" > /dev/null 2>&1; then
             echo "::warning::release $tag already exists - refreshing its notes"
             gh release edit "$tag" --title "$tag" --notes "$notes"

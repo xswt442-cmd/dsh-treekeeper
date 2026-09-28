@@ -3,24 +3,48 @@
 Release notes are generated from the matching version section; newest first.
 For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
+## 0.3.3 - 2026-09-28
+
+### Security
+
+- Host-side JSON replies and session-id validation come from the embedded `dsh-mini-utility-dock` fragment `dsh-host-http`, so `cache-control: no-store` has a single setter.
+- Connection authorization is one `authorizeBrowser(req, res)` call built by that fragment. A reload during the window after a Connection has existed still returns 503 rather than falling back to the loopback guard.
+- The 500 response and the panel's error rendering contain a fixed `code`; the exception text goes to the host log.
+- The `action` written to that host log has its line breaks folded and its length truncated, so one request produces one log row.
+
+### Changed
+
+- An unusable request body returns a distinguishable error: a body that is not a JSON object returns 400 `bad_json`, an oversized one returns 413 `body_too_large`.
+- `pid` and `pollMs` go through explicit validation: an invalid value is not folded into `0`, and an out-of-bounds poll interval returns 400.
+- The process sampler (`lib/sampler.js`) has parsing and degradation tests, covering the `snapshot.degraded` flag the termination gates depend on.
+- The history store distinguishes an empty store from an unusable one and logs once per state change.
+
+### Maintenance
+
+- The compatibility workflow runs on `pull_request`, its Windows cell runs the unit tests, syntax checking walks `lib/*.js`, and the matrix drops `@latest` and adds the `engines.node` floor, Node 20.
+- The publish workflow splits into checks / npm / GitHub release jobs: the jobs that run this repository's code hold a read-only token, and a tag must be an ancestor of `main` to reach npm.
+- The npm package includes both CHANGELOGs and `LICENSE`, `package.json` declares an author, both READMEs lead their badge row with the compatibility CI badge, and a `README.en.md` link to a section name that does not exist is corrected.
+- `http:check` joined `npm test`. A check compares only the marked blocks its pinned dock knows, so the new block's presence and uniqueness are asserted by `test/host-http.test.js`.
+- The dock pin is 0.6.0 and all four embedded blocks re-synced; `http:check` covers the fourth block.
+
 ## 0.3.2 - 2026-09-25
 
 ### Changed
 
-- Adopt the two sidebar Session-row seats in DSH `0.1.7-rc.2`: `sidebar.session.row.leading` marks an idle row with a 12px glyph, and `sidebar.session.row.hover` adds a one-line summary plus a "View this session in TreeKeeper" entry. Both read only the cache the panel's snapshot fills, so neither causes host work.
-- The panel entry becomes `dsh-mini-utility-dock`'s shared launcher fragment: one icon at the bottom-left opens a menu of the three panels; the page-local dock protocol and `dock:sync` / `dock:check` are retired, and the panel is pinned to the frame's top-right.
+- Adopt DSH `0.1.7-rc.2`'s two sidebar Session-row seats: an idle row shows a small glyph, its hover card a one-line summary and a "View this session in TreeKeeper" entry. Both read the panel's cache, so neither reaches the host.
+- The panel entry becomes `dsh-mini-utility-dock`'s shared launcher fragment: one icon at the bottom-left opens the panel menu. The page-local dock protocol and `dock:sync` / `dock:check` are retired, and the panel is pinned to the top-right.
 - Raise the minimum supported DSH version to `0.1.5-rc.3`; the compatibility matrix now pins this baseline and the 0.1.7 line.
-- Declare host compatibility: `peerDependencies` and `engines.dsh` both require `>=0.1.5-rc.3`, with the peer marked optional so npm never installs the host. The host's startup preflight disables a plugin whose peer does not match; declaring none left it with nothing to judge.
-- Fix the family launcher disappearing after a hot reload: synced from `dsh-mini-utility-dock` 0.5.1, whose claim is released with its owner so the other copies register again without a full page reload.
+- Declare host compatibility: `peerDependencies` and `engines.dsh` both require `>=0.1.5-rc.3`, with the peer optional so npm never installs the host. The host's startup preflight uses that range to decide whether to disable this plugin.
+- Fix the bottom-left launcher icon disappearing after a hot reload: synced from `dsh-mini-utility-dock` 0.5.1, whose claim is released with its owner so the page's other copies register again without a full reload.
 
 ## 0.3.0 - 2026-09-23
 
 ### Fixed
 
-- Two fail-open holes in the kill path: extracting the gates dropped the sample binding, so an authorized kill always threw and answered 500; and a failed probe read as "already gone" or "killed" — one hole on each side of taskkill. Both now fail closed.
-- An empty CIM reply is treated as degradation: a live machine never samples zero processes, and the empty result used to render as a healthy, empty machine with no hint.
+- Two fail-open holes in the kill path now fail closed: an authorized kill no longer throws for want of a sample, and a failed probe is no longer reported as "already gone" or "killed".
+- An empty CIM reply is treated as degradation: a live machine never samples zero processes.
 - History append and rotation are serialized: the background poll and concurrent kills both append, and interleaving could drop a line.
-- Background sampling failures leave a log line; they used to be swallowed, letting the snapshot go stale while the panel showed nothing.
+- Background sampling failures leave a log line instead of being swallowed.
 
 ### Changed
 
