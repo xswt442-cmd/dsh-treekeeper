@@ -107,7 +107,8 @@ jobs:
         # this repository never made, and a red main stops a release. The moving
         # channel belongs to the scheduled run's own judgement, not to a gate that
         # has to stay green to mean anything.
-        dsh-spec: ['@0.1.5-rc.3', '@0.1.7-rc.2']
+        # 0.2.0-rc.1 is the newest anchor: the plugin-facing APIs this plugin reads are unchanged since 0.1.7-rc.2.
+        dsh-spec: ['@0.1.5-rc.3', '@0.1.7-rc.2', '@0.2.0-rc.1']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
