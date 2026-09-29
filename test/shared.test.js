@@ -80,10 +80,8 @@ test('API guard rejects a foreign Origin and a rebound non-loopback Host', () =>
   assert.equal(subdomainResponse.body.code, 'non_loopback')
 
   // The IPv4-mapped IPv6 form of loopback IS loopback: a dual-stack browser
-  // reaches the panel as ::ffff:127.0.0.1, and rejecting it locked a legitimate
-  // client out of its own API. This used to assert the opposite here — the
-  // disagreement a local copy of the guard could not see. Covered in both
-  // spellings; see the parity bin.
+  // reaches the panel as ::ffff:127.0.0.1, and rejecting it locks a legitimate
+  // client out of its own API. Covered in both spellings; see the parity bin.
   for (const host of ['[::ffff:127.0.0.1]:3080', '[::ffff:7f00:1]:3080']) {
     const allowedResponse = response()
     assert.equal(guard(loopback({ host }), allowedResponse), true, `${host} is loopback`)

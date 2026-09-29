@@ -38,9 +38,9 @@ test('readBody still parses a normal JSON body', async () => {
   assert.deepEqual(await pending, { pollMs: 2000 })
 })
 
-// A swallowed parse error used to look like "no body": a truncated kill request
-// reached the gates with `{}`, answered 409 snapshot_required, and told the caller
-// to refresh a snapshot for a request that never named a pid.
+// A malformed body is its own outcome, not "no body". `readBody` reports it so
+// the route answers 400 `bad_json`, and a truncated kill request is read as a
+// bad body rather than one that carried no pid at all.
 test('readBody separates a malformed body from no body', async () => {
   const malformed = [
     '{"pid":',

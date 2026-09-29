@@ -22,7 +22,7 @@ test('history store keeps local append-only audit records', async (t) => {
 
 // The store shares the host process with the panel and the webserver, so every
 // read and write goes through fs/promises: a rotation reads the whole file
-// back, and that used to block the one thread every other request waits on.
+// back, and a synchronous read would block the thread every request waits on.
 test('history store appends and reads without blocking the thread that owns it', async (t) => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'treekeeper-history-'))
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }))
