@@ -1,8 +1,8 @@
-// DTK-M2: the deterministic session entry. The panel previously guessed the
-// current session from `sessions.list.getSnapshot().current`, which can be
-// empty. A session-scope header action now hands the panel a sessionId the
-// slot contract guarantees; the three states (available / root-required /
-// unavailable) are expressed inside the root-scoped panel.
+// DTK-M2: the deterministic session entry. A session-scope header action hands
+// the panel a sessionId the slot contract guarantees; that id resolves the root
+// ahead of `sessions.list.getSnapshot().current`, which can be empty. The three
+// states (available / root-required / unavailable) are expressed inside the
+// root-scoped panel.
 //
 // This file boots the client bundle twice: once against the plugin's pure
 // decision helpers (exposed as _tkTest) and once through the fake-React

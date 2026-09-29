@@ -3,6 +3,12 @@
 Release notes are generated from the matching version section; newest first.
 For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
+## 0.3.6 - 2026-09-29
+
+### Maintenance
+
+- No behaviour changed: only the explanatory text in `lib/` and `test/` was rewritten; assertions, routes and termination gates are untouched.
+
 ## 0.3.5 - 2026-09-29
 
 ### Maintenance

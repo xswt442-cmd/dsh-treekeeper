@@ -191,8 +191,8 @@ test('killTree refuses when a protected pid is a descendant (Problem 3)', async 
 })
 
 test('a non-Windows host reports unsupported_platform and spawns nothing', async () => {
-  // The branch that used to be unreachable in a test: the gates pass, the OS
-  // says no, and `taskkill` must still never be attempted.
+  // The non-Windows branch: the gates pass, the OS says no, and `taskkill`
+  // must still never be attempted.
   const target = { pid: 200, ppid: 1, name: 'node', cmdline: 'node', createdMs: CREATED_MS, wsBytes: 0 }
   for (const platform of ['linux', 'darwin']) {
     const os = fakeOs({ platform, probes: [aliveProbe(), aliveProbe()] })
