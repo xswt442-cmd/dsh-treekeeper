@@ -270,7 +270,7 @@ test('the hover seat shows the cached facts and focuses the panel on its row ses
   const filled = mountOccupant(hover, { sessionId: 'session-a' }, react)
   const line = allNodes(filled, (node) => node.props?.className === 'tk-row-hover-line')
   assert.equal(line.length, 1)
-  assert.equal(textOf(line[0]), 'Descendants 2 (1 running) · Job ledger 1 · Findings 1 · 1 read issues')
+  assert.equal(textOf(line[0]), 'Subagents 2 (1 running) · Job ledger 1 · Findings 1 · 1 read issues')
   const action = allNodes(filled, (node) => node.type === 'button')[0]
   assert.equal(textOf(action), 'View this session in TreeKeeper')
   action.props.onClick()

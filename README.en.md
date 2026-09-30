@@ -15,11 +15,16 @@ A Windows-focused DSH process-tree reconciliation and governance plugin. It puts
 
 ## Features
 
-- Sample the current DSH host tree without attributing unrelated launcher children to the host; that section is collapsed by default, with its count badge still on the heading.
-- Attribute each process to the job that created it, with a confidence level per finding: `hard` is confirmed, `inferred` is a lead only and cannot be tree-killed.
-- Detect duplicate commands, orphaned processes, and long-running plugin children; reconcile jobs and the selected session's subagent descendants without waking cold sessions.
-- Guarded tree termination (`taskkill /T /F`): the target must belong to the DSH host tree, is re-sampled and re-checked immediately before the kill including its creation time, and the tree must contain no protected descendant, so an allowlisted PID is only annotated and never widens the kill scope. See "Safety and limits".
-- Open the global panel from the `dsh-mini-utility-dock` launcher at the bottom-left of the work area, or focus the current session from its header; sidebar Session rows also show the cached per-session facts (a small glyph in an idle row's leading cell, a one-line summary and focus entry in its hover card). Identify plugin sources from command paths and retain finding and action history.
+- Sample the current DSH host process tree; other children of the launcher are never attributed to it.
+- Attribute each process to the job that created it, and detect duplicate command lines, orphaned processes and long-running plugin children.
+- Reconcile the job ledger with the root session's subagent descendant tree; the descendant tree of any other session is never read.
+- Guarded tree termination (`taskkill /T /F`); the conditions are listed in the termination-guard table under "Safety and limits".
+- Identify the plugin a process belongs to from the `node_modules` path in its command line, and keep finding and termination history.
+- The DSH host descendants section is collapsed by default, with its count on the heading.
+- The panel header shows the host kind, taken from the host process's executable path and command line; the process environment is not part of the decision.
+- The desktop application's own Electron processes are listed as one group inside the unattributed section, and each member keeps its command line, pid, memory and age.
+- A finding carries one of three confidence tiers: `exact`, confirmed by attribution into the host process tree and eligible for a tree kill; `indicative`, where the process fact is real and the attribution link is softer or missing (a degraded sample, or a survivor left by a previous host); `inferred`, produced by a heuristic rule alone and never eligible.
+- The `dsh-mini-utility-dock` launcher at the bottom-left opens the global panel, a session header opens it focused on that session, and a sidebar Session row shows the cached facts for that session.
 
 ## Install
 
@@ -34,7 +39,8 @@ npm install dsh-treekeeper
 dsh plugin --profile web add github:xswt442-cmd/dsh-treekeeper
 ```
 
-`npm install` installs the package only; DSH still needs the bundle in its profile. `dsh plugin add` performs both steps. Restart DSH Web after installation.
+- `npm install` installs the package only and does not register a DSH profile.
+- Restart DSH Web after installation.
 
 ## Session scope
 
@@ -42,38 +48,72 @@ The subagent section has three states:
 
 | State | Meaning |
 | --- | --- |
-| `available` | Shows the selected session's complete descendant tree |
-| `root-required` | Opened from the panel launcher without a selected session |
+| `available` | Shows the root session's complete descendant tree |
+| `root-required` | No root session is available |
 | `unavailable` | The current DSH build does not expose subagents |
 
-The session-header entry always supplies an explicit session; the global entry never guesses the current selection.
+The session-header entry takes the row's sessionId as the root session, and the global panel entry takes the currently selected session.
 
-Once the panel has loaded a snapshot, the facts attributable to a specific session (that session's subagent descendants, the running jobs it owns, and the findings the ledger join links to it) enter a client-side cache and appear on the sidebar's Session rows: an idle row's leading cell shows a small glyph, and its hover card shows a one-line summary plus "View this session in TreeKeeper". Both occupants read only that cache, issue no host read, and never wake or sample a session from an idle row. Unattributed processes, ownerless jobs, and the host process list cannot be attributed to a session and therefore never appear on a row.
+Once the panel has loaded a snapshot, the facts attributable to a specific session enter a client-side cache:
+
+| Cached fact | Attribution source |
+| --- | --- |
+| Descendant count, running count, read-issue count | The response's `subagentRoot` and its descendant rows |
+| Running job count | The ledger row's `ownerSession` |
+| Finding count | The `ownership.session` filled by the ledger join |
+
+The host process list, unattributed processes, and jobs without an owner session cannot be attributed to a session and are not cached.
+
+A sidebar Session row reads that cache: an idle row's leading cell shows a glyph and its hover card shows a one-line summary with "View this session in TreeKeeper". With no cached fact for that session the leading cell stays empty while the hover card's action still works, and neither issues a host read.
 
 ## Configuration
 
 Configuration is process-local and resets on restart.
 
-| Field | Default | Description |
-| --- | ---: | --- |
-| `pollMs` | `0` | Background sampling interval; `0` samples on demand, minimum active value is 2000 ms |
-| `allowKill` | `true` | Enables guarded process-tree termination |
-| `extraWhitelistPids` | `[]` | Additional protected PIDs |
+| Field | Default | Range | Purpose |
+| --- | ---: | --- | --- |
+| `pollMs` | `0` | `0` (sample on request) or 2000–600000 ms | Background sampling interval |
+| `allowKill` | `true` | Boolean | Enables guarded process-tree termination |
+| `extraWhitelistPids` | `[]` | Array of PIDs | Additional protected PIDs |
 
 ## Safety and limits
 
-On DSH 0.1.0-rc.7+, the browser API reuses the Connection signed cookie. Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal.
+| Item | Limit |
+| --- | --- |
+| Platform | Windows only |
+| Non-Windows | Reports `unsupported_platform` |
+| Sampling degradation | If CIM is unavailable, sampling degrades to read-only and attribution and termination are disabled |
+| Browser credential | On DSH 0.1.0-rc.7+, the browser API reuses the Connection signed cookie |
+| Admission when the host has a Connection | Decided by the Connection's Host/Origin fence plus the signed cookie |
+| Admission when the host has no Connection | Decided by this plugin's guard: TCP peer address, Fetch Metadata, Origin, and loopback Host |
+| Mutating actions | POST-only |
+| Remote reach | On a host configured with `trustedHosts` and listening on `0.0.0.0`, a remote peer holding a valid browser session reaches the API, `kill` included |
+| Admission narrowing | This plugin does not narrow the host's Connection admission, and the kill guards below apply there as well |
+| Traversal cancellation | Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal |
 
-- Windows is currently supported. If CIM is unavailable, sampling degrades to read-only and disables attribution and termination.
-- Admission to the browser API is decided by the Connection service the host mounts: a host that has it applies its Host/Origin fence plus the signed cookie, and only a host without it falls back to this plugin's own guard, which decides by TCP peer address, Fetch Metadata, Origin, and loopback Host. Mutating actions are POST-only either way.
-- This plugin does not narrow that layer by itself. On a host configured with `trustedHosts` and listening on 0.0.0.0, a remote peer holding a valid browser session reaches the API too, `kill` included; the guardrails of the kill action itself (snapshot, creation time, attribution tree, protected descendants) still apply.
-- Termination requires a complete snapshot no older than 15 seconds and rechecks the PID creation time; only processes inside the DSH host tree may be terminated, while unknown processes are investigation-only and cannot be killed.
-- Critical system processes, the current host, its launcher chain, and additional whitelisted PIDs cannot be terminated. Killable scope is the DSH host attribution only: an extra whitelisted PID is an attribution root for labelling, and its descendants stay visible but not killable, so protecting a PID never widens the kill scope.
-- Protected descendants are evaluated against a process tree sampled immediately before the kill: if that tree contains any protected PID the whole kill is refused. A protected descendant that appears after that sample cannot be excluded — `taskkill /T` has no exclusion switch — which is the residual TOCTOU boundary, not an absolute guarantee.
-- Jobs have no stable PID mapping to OS processes; command-line matches are investigative and never trigger automatic action.
+Kill guards:
+
+| Guard | Rule |
+| --- | --- |
+| Arming | The first click arms the button for 6 seconds |
+| Confirmation | The second click opens the browser confirmation dialog |
+| Snapshot | Requires a complete snapshot no older than 15 seconds |
+| Identity check | The PID creation time is compared with the snapshot on entry |
+| Recheck before the kill | A fresh sample is taken and the creation time is compared again |
+| Attribution | Only processes whose attribution root is the DSH host may be terminated, and unattributed processes are investigation-only |
+| Never terminable | Critical system processes, the current host, its launcher chain, and `extraWhitelistPids` |
+| Whitelist | An extra whitelisted PID is an attribution root for investigation, and its descendants are visible but not terminable |
+| Protected descendants | If the tree sampled immediately before the kill contains any protected PID, the whole operation is refused |
+
+A protected descendant that appears after that sample cannot be excluded.
+
+- Jobs have no stable PID mapping to OS processes.
+- Command-line matches are investigative and never trigger automatic action.
 - Findings and termination results are written to `$DSH_HOME/treekeeper/history.jsonl`.
 
 ## Development
+
+Run before committing:
 
 ```sh
 npm test

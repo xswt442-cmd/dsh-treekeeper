@@ -3,6 +3,31 @@
 Release notes are generated from the matching version section; newest first.
 For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
+## 0.4.0 - 2026-09-30
+
+### Fixed
+
+- Process creation times now parse under Windows PowerShell 5.1, restoring the tree-kill button and the long-lived rule.
+- The host's own live parent is no longer reported as an orphan: parent liveness is judged against the whole snapshot.
+
+### Changed
+
+- The unattributed list is ordered by DSH relevance, and its count now separates DSH-related rows from the machine-wide total.
+- The panel header shows the owning host's pid and port, so hosts running side by side can be told apart.
+- The panel header also carries the host kind, taken from the host process's executable path and command line; the process environment is not part of the decision.
+- The desktop application's own Electron processes are listed as one group inside the unattributed section, and each member keeps its evidence badge and its command line, pid, memory and age columns.
+- Audit history records carry the writing host's pid and port, so one shared history file stays attributable.
+- The panel summary counts findings at each of the three levels — `exact`, `indicative` and `inferred` — and every row's evidence badge names the level it is counted under.
+- An evidence badge is coloured by its level alone: `exact` and `indicative` take the warning colour, `inferred` the muted one.
+
+### Added
+
+- A new lead reports processes left behind by a host that was killed: a missing parent plus a DSH deployment path, at indicative level and never as a kill candidate.
+
+### Maintenance
+
+- The harness home is taken from the boot layer's `dshHomePath` accessor when the host provides one, falling back to the previous resolution otherwise.
+
 ## 0.3.6 - 2026-09-29
 
 ### Maintenance

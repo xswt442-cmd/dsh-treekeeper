@@ -21,6 +21,9 @@ const fixture = (name) => fs.readFileSync(new URL(`./fixtures/${name}`, import.m
 const CIM_FIXTURE = fixture('cim-processes.json')
 const CIM_SINGLE_FIXTURE = fixture('cim-single-process.json')
 const CIM_TRUNCATED_FIXTURE = fixture('cim-truncated.json')
+// Windows PowerShell 5.1's `ConvertTo-Json`, which is what this plugin's
+// `powershell.exe` child runs: the same query, the escaped `\/Date(ms)\/` form.
+const CIM_PS51_FIXTURE = fixture('cim-processes-ps51.json')
 const TASKLIST_FIXTURE = fixture('tasklist-normal.txt')
 const TASKLIST_TRUNCATED_FIXTURE = fixture('tasklist-truncated.txt')
 
@@ -110,6 +113,36 @@ test('a single-process CIM reply is an object, not an array, and still parses', 
   assert.equal(rows.length, 1)
   assert.equal(rows[0].pid, 18432)
   assert.equal(rows[0].ppid, 19000)
+})
+
+// The kill path compares a process's creation time against a freshly sampled
+// one, and it refuses to arm without that identity. Windows PowerShell 5.1 —
+// the `powershell.exe` this plugin always spawns — serializes every CIM
+// datetime as `\/Date(ms)\/` rather than the ISO string PowerShell 7 produces,
+// and reading that as "no identity" left every row without a creation time:
+// no kill button, no long-lived rule. This fixture is the escaped reply itself.
+test('a Windows PowerShell 5.1 reply keeps creation times, so a snapshot stays actionable', async () => {
+  const os = harness({ cim: CIM_PS51_FIXTURE })
+  const { procs, degraded } = await sample({ deps: os.deps })
+
+  assert.equal(degraded, null, 'the escaped .NET date form is not a degraded sample')
+  assert.ok(CIM_PS51_FIXTURE.includes('\\/Date(1790745392422)\\/'), 'the fixture must stay in the form 5.1 emits')
+
+  const byPid = new Map(procs.map((p) => [p.pid, p]))
+  // The desktop host and its Electron parent both arrive as `/Date(ms)/`.
+  assert.equal(byPid.get(37224).createdMs, 1790745392422)
+  assert.equal(byPid.get(40376).createdMs, 1790745000000)
+  assert.equal(byPid.get(38888).createdMs, 1790745123456)
+  assert.equal(byPid.get(99001).createdMs, 1790745600000)
+  assert.equal(byPid.get(37224).name, 'DeepSeek Harness', '.exe is stripped here too')
+  // The assertion the defect needs: a real snapshot has at least one dated row,
+  // so the kill button and the long-lived rule have something to work from.
+  assert.ok(procs.some((p) => Number.isFinite(p.createdMs)), 'a real snapshot dates at least one process')
+  // The two ways a creation time legitimately stays unknown, and neither may be
+  // rounded into a number: an absent property, and the .NET floor that a
+  // refused property carries. The floor must not read as 1601.
+  assert.equal(byPid.get(21100).createdMs, null)
+  assert.equal(byPid.get(20144).createdMs, null, 'the .NET DateTime floor is not a creation time')
 })
 
 test('rows the contract cannot vouch for are dropped, not guessed', () => {
