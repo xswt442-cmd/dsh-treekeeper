@@ -266,6 +266,89 @@ test('the summary splits findings by tier', () => {
   assert.match(textOf(summary[0]), /hard 3 · inferred 1/)
 })
 
+// The host's summary line reports two scopes, because one number could not be
+// read: the machine has hundreds of unattributed processes and only a few are
+// DSH-adjacent, so the panel states the related head and the bucket it came from.
+test('the summary names the unattributed scope and its machine-wide total', () => {
+  const data = fixtureData()
+  data.reconcile = { summary: { jobs: 1, jobsMatched: 1, osOnly: 0, unattributed: 3, unattributedTotal: 386 }, rows: [] }
+  const { surface } = boot(data)
+  const panel = panelOf(surface, data)
+  const head = allNodes(panel, (node) => node.props?.className === 'tk-sechead')
+  assert.match(textOf(head[0]), /jobs 1 · matched 1 · os-only 0 · DSH-related unattributed 3 \/ machine-wide unattributed 386/)
+})
+
+// The unattributed list is truncated to twenty rows, so the disclosure has to
+// say what the badge counts and what the order means.
+test('the unattributed disclosure states the scope of its badge', () => {
+  const data = fixtureData()
+  data.unknown = [
+    { pid: 37224, ppid: 40376, name: 'DeepSeek Harness', cmdline: 'host', createdMs: Date.now() - 60000, wsBytes: 0, evidence: 'unattributed', attribution: null },
+    { pid: 4, ppid: 0, name: 'System', cmdline: '', createdMs: null, wsBytes: 0, evidence: 'unattributed', attribution: null }
+  ]
+  const { surface } = boot(data)
+  const panel = panelOf(surface, data)
+  const disclosures = allNodes(panel, (node) => node.type === 'details' && node.props.className === 'tk-disclosure')
+  const unknown = disclosures.find((node) => textOf(node).includes('Unattributed (ranked by DSH relevance)'))
+  assert.ok(unknown, 'the unattributed disclosure exists')
+  const unknownSummary = allNodes(unknown, (node) => node.type === 'summary')[0]
+  assert.match(textOf(unknownSummary), /^Unattributed \(ranked by DSH relevance\)2$/, 'the badge counts the whole bucket, not the rows shown')
+  assert.match(textOf(unknown), /2 unattributed processes machine-wide; ranked by DSH relevance, showing the first 20\./)
+})
+
+// The header has to answer "which tree is this". `$DSH_HOME/treekeeper` and the
+// process table are shared, so a desktop host and a `dsh web` host at the same
+// time render nearly the same panel; the owning pid and port separate them.
+test('the panel header names the owning host by pid and port', () => {
+  const data = fixtureData()
+  data.port = 3080
+  const { surface } = boot(data)
+  const panel = panelOf(surface, data)
+  const head = allNodes(panel, (node) => node.props?.className === 'tk-head')
+  assert.equal(head.length, 1)
+  assert.match(textOf(head[0]), /this host pid 100 · port 3080/)
+})
+
+test('the header states an unknown port rather than dropping it', () => {
+  const data = fixtureData()
+  const { surface } = boot(data)
+  const panel = panelOf(surface, data)
+  const head = allNodes(panel, (node) => node.props?.className === 'tk-head')
+  assert.match(textOf(head[0]), /this host pid 100 · port \?/)
+})
+
+// A leftover of a host that was killed has real evidence and no chain at all:
+// confidence `indicative`, scope `unattributed`. It belongs in the
+// investigation bucket, and the badge must name the level the host stamped
+// rather than the bucket it sits in.
+test('an indicative previous-host lead is investigated, never offered for kill', () => {
+  const data = fixtureData()
+  data.findings = data.findings.filter((finding) => finding.rule !== 'orphan.dead-parent')
+  data.findings.push({
+    type: 'orphan', rule: 'orphan.previous-host', key: 'pid:99', pids: [99],
+    detail: 'parent 8888 is gone and node 99 still carries a DSH path',
+    confidence: 'indicative',
+    ownership: { scope: 'unattributed', via: 'none', rootLabel: null, depth: null, session: null, job: null },
+    provenance: { rule: 'orphan.previous-host', description: 'an unattributed process outlived its parent and still carries a DSH deployment path' },
+    evidence: { parentPid: 8888, name: 'node', signals: ['asar'] }
+  })
+  data.processes.push({ pid: 99, ppid: 0, name: 'node', cmdline: 'node app.asar index.js', createdMs: Date.now() - 60000, wsBytes: 0, evidence: 'unattributed', attribution: null })
+  const { surface } = boot(data)
+  const panel = panelOf(surface, data)
+
+  const disclosures = allNodes(panel, (node) => node.type === 'details' && node.props.className === 'tk-disclosure')
+  const inferred = disclosures.find((node) => textOf(node).includes('Inferred findings'))
+  assert.ok(inferred, 'the lead lands in the investigation bucket')
+  assert.match(textOf(inferred), /indicative orphan/)
+  assert.match(textOf(inferred), /orphan\.previous-host/)
+  assert.ok(!textOf(inferred).includes('inferred orphan'), 'an indicative lead never reads as inferred')
+  assert.equal(allNodes(inferred, (node) => node.props?.className === 'tk-btn').length, 0,
+    'a previous host survivor is a lead, not a kill candidate')
+  // The tier split counts buckets, and this finding occupies the second one.
+  const summary = allNodes(panel, (node) => node.props?.className === 'tk-summary')
+  assert.match(textOf(summary[0]), /hard 3 · inferred 1/)
+})
+
 function containsNode(outer, inner) {
   if (outer === inner) return true
   for (const child of outer.children || []) {

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import path from 'node:path'
-import { treekeeperGuard, hasVerifiedCreationTime, parseCimDate, isLoopbackAddress, resolveDshHome } from '../lib/shared.js'
+import { treekeeperGuard, hasVerifiedCreationTime, parseCimDate, isLoopbackAddress, resolveDshHome, dshSignals, hasPreviousHostSignal, rankUnattributed } from '../lib/shared.js'
 
 function response() {
   return {
@@ -23,6 +23,56 @@ test('CIM dates and identity tolerance are parsed consistently', () => {
   assert.ok(hasVerifiedCreationTime(createdMs, createdMs + 750))
   assert.ok(!hasVerifiedCreationTime(createdMs, createdMs + 751))
   assert.ok(!hasVerifiedCreationTime(createdMs, null))
+})
+
+test('the .NET JSON date form is a creation time, and the .NET floor is not', () => {
+  // Windows PowerShell 5.1's ConvertTo-Json has no ISO form: the JSON text is
+  // `"\/Date(ms)\/"`, which parses back to `/Date(ms)/`. Reading it as null
+  // stripped the creation time — and with it the kill button — from every row.
+  assert.equal(parseCimDate('/Date(1790745392422)/'), 1790745392422)
+  assert.equal(parseCimDate('  /Date(1790745392422)/  '), 1790745392422)
+  // Digits only: the floor a refused property carries (1601-01-01) must not be
+  // read back as a creation time the kill gate would then compare for identity.
+  assert.equal(parseCimDate('/Date(-62135596800000)/'), null)
+  assert.equal(parseCimDate('/Date(abc)/'), null)
+  assert.equal(parseCimDate('/Date(1790745392422)/extra'), null)
+  // Every form the two PowerShell generations emit, plus absence, stays distinct.
+  assert.equal(parseCimDate('2026-08-25T16:29:59.250+08:00'), Date.UTC(2026, 7, 25, 8, 29, 59, 250))
+  assert.equal(parseCimDate(null), null)
+  assert.equal(parseCimDate(''), null)
+})
+
+test('DSH relevance orders the unattributed bucket, and only DSH paths accuse a dead host', () => {
+  const desktopHost = {
+    pid: 37224,
+    name: 'DeepSeek Harness',
+    cmdline: '"E:\\DSH\\DeepSeek Harness.exe" --expose-internals "E:\\DSH\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-desktop-host\\lib\\index.js"'
+  }
+  assert.deepEqual(dshSignals(desktopHost).signals, ['image', 'expose-internals', 'asar', 'node_modules'])
+  assert.equal(dshSignals(desktopHost).score, 13)
+  assert.ok(hasPreviousHostSignal(desktopHost))
+
+  // A package manager is a ranking signal only: `_npx` and `node_modules` say
+  // nothing about which host spawned a process, so they never accuse one.
+  const cache = {
+    pid: 51,
+    name: 'node',
+    cmdline: 'node C:\\Users\\dev\\AppData\\Local\\npm-cache\\_npx\\abc\\node_modules\\x\\index.js'
+  }
+  assert.deepEqual(dshSignals(cache).signals, ['npx', 'node_modules'])
+  assert.ok(!hasPreviousHostSignal(cache))
+  // The `npx` a command line invokes is not the `_npx` cache path it runs from.
+  assert.equal(dshSignals({ pid: 50, name: 'cmd', cmdline: 'cmd /c npx -y @upstash/context7-mcp' }).score, 0)
+  assert.equal(dshSignals({ pid: 4, name: 'System', cmdline: '' }).score, 0)
+  assert.equal(dshSignals(undefined).score, 0)
+
+  const ranked = rankUnattributed([
+    { pid: 900, name: 'svchost', cmdline: 'C:\\Windows\\system32\\svchost.exe -k netsvcs' },
+    cache,
+    desktopHost,
+    { pid: 3, name: 'System', cmdline: '' }
+  ])
+  assert.deepEqual(ranked.map((p) => p.pid), [37224, 51, 3, 900], 'relevance first, then pid ascending')
 })
 
 test('isLoopbackAddress folds real loopback forms and fails closed', () => {

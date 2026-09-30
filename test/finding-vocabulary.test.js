@@ -24,7 +24,7 @@ test('the vocabulary domains are fixed and enumerable', () => {
   assert.deepEqual([...FINDING_CONFIDENCE], ['exact', 'indicative', 'inferred'])
   assert.deepEqual([...FINDING_SCOPE], ['host-descendant', 'session', 'job', 'unattributed'])
   assert.deepEqual([...FINDING_VIA], ['ppid-chain', 'root-itself', 'job-label', 'none'])
-  assert.deepEqual([...FINDING_RULE], ['duplicate.cmdline', 'orphan.dead-parent', 'longlived.plugin-child'])
+  assert.deepEqual([...FINDING_RULE], ['duplicate.cmdline', 'orphan.dead-parent', 'orphan.previous-host', 'longlived.plugin-child'])
 })
 
 test('each heuristic names its own rule even when called on its own', () => {
@@ -163,6 +163,33 @@ test('the ledger join adds the session and job links to ownership', () => {
     rootLabel: 'harness', depth: 1, session: null, job: null
   })
   assert.equal(applyLedgerOwnership(findings, null), findings)
+})
+
+test('the previous-host rule stays inside the declared domains', () => {
+  const procs = [
+    proc(1, 0, 'node host.js'),
+    proc(2, 1, 'node host-child.js'),
+    // The leftover a killed host leaves: no live parent, no attribution chain,
+    // but the desktop bundle path is still in its command line.
+    proc(99, 8888, 'node E:\\DSH\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-desktop-host\\lib\\index.js')
+  ]
+  const attribution = attribute(procs, new Map([[1, 'harness']]))
+  const findings = collectFindings(procs, attribution, { minCopies: 3 })
+
+  assert.equal(findings.length, 1)
+  const [finding] = findings
+  assert.equal(finding.rule, 'orphan.previous-host')
+  // Indicative, not inferred: the evidence is real, the link to this host is not.
+  assert.equal(finding.confidence, 'indicative')
+  assert.ok(FINDING_CONFIDENCE.includes(finding.confidence))
+  assert.equal(finding.ownership.scope, 'unattributed')
+  assert.ok(FINDING_SCOPE.includes(finding.ownership.scope))
+  assert.ok(FINDING_VIA.includes(finding.ownership.via))
+  assert.ok(FINDING_RULE.includes(finding.rule))
+  assert.deepEqual(finding.provenance, {
+    rule: 'orphan.previous-host',
+    description: FINDING_RULE_DESCRIPTION['orphan.previous-host']
+  })
 })
 
 test('every collected finding stays inside the declared domains', () => {

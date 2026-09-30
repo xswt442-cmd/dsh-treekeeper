@@ -538,6 +538,10 @@ test('a kill that runs forwards the fresh tree, and its OS text stays out of the
     assert.equal(kill.code, 'taskkill_failed')
     assert.equal(kill.detail, rawStderr)
     assert.equal(kill.pid, 4234)
+    // One history file is shared by every host on the machine, so each record
+    // has to say which host wrote it; the file name itself cannot change.
+    assert.equal(kill.hostPid, process.pid)
+    assert.equal(kill.port, 3080)
 
     // A refusal whose detail is a name the plugin chose is still shown: it is the
     // answer to "why was this one refused", not a leak.
@@ -552,6 +556,32 @@ test('a kill that runs forwards the fresh tree, and its OS text stays out of the
     await protectedKill.route.handler(postWith({ pid: 4234, seenCreatedMs: 1000 }, '/dsh-treekeeper/api?action=kill'), protectedRes)
     assert.deepEqual(protectedRes.writes[1].body, { ok: false, code: 'protected', detail: 'lsass' })
     protectedKill.dispose()
+  } finally {
+    dispose()
+    restoreHome()
+  }
+})
+
+test('a findings record names the host that wrote it', async (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'treekeeper-routes-'))
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }))
+  const restoreHome = useDshHome(home)
+
+  // A root whose recorded parent is absent from the sample: one orphan finding,
+  // which is what makes the snapshot route append to the audit trail.
+  const procs = [{ pid: process.pid, ppid: 77777, name: 'node', cmdline: 'node host', createdMs: 1, wsBytes: 0 }]
+  const { route, dispose } = bootRoute({ deps: { sample: async () => ({ procs, degraded: null }) } })
+
+  try {
+    const res = await get(route, '?action=snapshot')
+    assert.equal(res.writes[0].status, 200)
+
+    const rows = await new HistoryStore(home).last(10)
+    const record = rows.find((row) => row.kind === 'findings')
+    assert.ok(record, 'a finding is recorded for the audit trail')
+    assert.equal(record.count, 1)
+    assert.equal(record.hostPid, process.pid)
+    assert.equal(record.port, 3080)
   } finally {
     dispose()
     restoreHome()

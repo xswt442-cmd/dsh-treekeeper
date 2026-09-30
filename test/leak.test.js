@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { findDuplicates, findOrphans, findLongLived, collectFindings, PROTECTED_NAMES } from '../lib/leak.js'
+import { findDuplicates, findOrphans, findLongLived, findPreviousHostOrphans, collectFindings, PROTECTED_NAMES } from '../lib/leak.js'
 import { attribute } from '../lib/attribute.js'
 
 function proc(pid, ppid, cmdline, createdMs = Date.now() - 60 * 60 * 1000, name = 'node', ws = 0) {
@@ -25,6 +25,67 @@ test('orphan detection finds survivors of dead parents', () => {
   const found = findOrphans(procs)
   assert.equal(found.length, 1)
   assert.equal(found[0].pids[0], 7)
+})
+
+// The false positive the panel showed at every refresh: the desktop host is a
+// descendant of the root itself, its parent is the live Electron main process,
+// and that parent is never in the killable list because DSH does not own it.
+test('a live parent outside the candidate list is not a dead parent', () => {
+  const procs = [
+    proc(12000, 1000, 'C:\\Windows\\Explorer.EXE', Date.now(), 'explorer'),
+    proc(40376, 12000, '"E:\\DSH\\DeepSeek Harness.exe"', Date.now(), 'DeepSeek Harness'),
+    proc(37224, 40376, 'node host.js')
+  ]
+  const killable = procs.filter((p) => p.pid === 37224)
+
+  assert.equal(findOrphans(killable).length, 1, 'against the narrowed list the parent looks gone')
+  assert.deepEqual(findOrphans(killable, new Set(procs.map((p) => p.pid))), [], 'against the whole snapshot it is alive')
+})
+
+test('a DSH path with a dead parent is a previous-host lead, and a plain node process is not', () => {
+  const leaf = Date.now() - 60 * 1000
+  const procs = [
+    proc(99001, 88888, 'node C:\\Users\\dev\\.dsh\\profiles\\web\\node_modules\\some-mcp\\index.js', leaf),
+    proc(99002, 88888, 'node C:\\Users\\dev\\node_modules\\some-mcp\\index.js', leaf),
+    proc(99003, 99001, 'node kid.js', leaf)
+  ]
+  const found = findPreviousHostOrphans(procs)
+
+  assert.equal(found.length, 1)
+  assert.equal(found[0].rule, 'orphan.previous-host')
+  assert.equal(found[0].key, 'pid:99001')
+  assert.equal(found[0].evidence.parentPid, 88888)
+  assert.deepEqual(found[0].evidence.signals, ['profile', 'node_modules'])
+})
+
+test('a previous-host survivor is an indicative investigation lead and never a candidate', () => {
+  const procs = [
+    proc(1, 0, 'node host.js'),
+    proc(2, 1, 'node host-child.js'),
+    // Long-lived and plugin-hinted, but outside the host tree: the two rules
+    // that could have claimed it look only at attributed descendants.
+    proc(99001, 88888, 'node C:\\Users\\dev\\.dsh\\profiles\\web\\node_modules\\some-mcp\\index.js', Date.now() - 45 * 60 * 1000)
+  ]
+  const attribution = attribute(procs, new Map([[1, 'harness']]))
+
+  const findings = collectFindings(procs, attribution, { minCopies: 3, olderThanMs: 30 * 60 * 1000 })
+
+  assert.equal(findings.length, 1)
+  assert.equal(findings[0].rule, 'orphan.previous-host')
+  assert.equal(findings[0].confidence, 'indicative')
+  assert.equal(findings[0].ownership.scope, 'unattributed')
+  assert.equal(findings[0].attribution, null)
+  assert.ok(!attribution.attributed.has(99001), 'the finding never claims the process')
+})
+
+test('the host tree does not report a live unattributed parent as an orphan', () => {
+  const procs = [
+    proc(40376, 12000, '"E:\\DSH\\DeepSeek Harness.exe"', Date.now(), 'DeepSeek Harness'),
+    proc(37224, 40376, 'node host.js')
+  ]
+  const attribution = attribute(procs, new Map([[37224, 'harness']]))
+
+  assert.deepEqual(collectFindings(procs, attribution, { minCopies: 3, olderThanMs: 30 * 60 * 1000 }), [])
 })
 
 test('long-lived only flags plugin children past the threshold', () => {
