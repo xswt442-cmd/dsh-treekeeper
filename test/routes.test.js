@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { apply } from '../lib/index.js'
+import { HOST_KIND_WEB } from '../lib/shared.js'
 import { HistoryStore } from '../lib/store.js'
 
 function responseCapture() {
@@ -45,6 +46,10 @@ function bootRoute(services = {}) {
   let disposeCleanup = null
   apply({
     webServer: { port: 3080, register(value) { route = value; return () => {} } },
+    // Only the mount that needs the boot layer's home accessor supplies `get`;
+    // without one the plugin falls back to resolveDshHome(), which is the path
+    // every other test in this file exercises.
+    ...(services.get ? { get: services.get } : {}),
     inject(names, mount) {
       if (names.includes('connection') && services.connection) {
         mount({ connection: services.connection, on: services.connectionOn })
@@ -586,6 +591,79 @@ test('a findings record names the host that wrote it', async (t) => {
     dispose()
     restoreHome()
   }
+})
+
+// The audit trail is one file per machine precisely so that the desktop host
+// and a `dsh web` host land in the SAME feed. A process whose own idea of the
+// home disagrees with the host's therefore reads an empty history and writes
+// one nobody else opens, so the home the host names has to win over $DSH_HOME.
+// Both homes are real directories here, which is what lets the assertion say
+// WHICH one received the record.
+test('the host accessor, not $DSH_HOME, decides where the audit trail is written', async (t) => {
+  const envHome = fs.mkdtempSync(path.join(os.tmpdir(), 'treekeeper-env-home-'))
+  const hostHome = fs.mkdtempSync(path.join(os.tmpdir(), 'treekeeper-host-home-'))
+  t.after(() => {
+    fs.rmSync(envHome, { recursive: true, force: true })
+    fs.rmSync(hostHome, { recursive: true, force: true })
+  })
+  const restoreHome = useDshHome(envHome)
+
+  // A root whose recorded parent is absent from the sample: one orphan finding,
+  // which is what makes the snapshot route append to the audit trail.
+  const procs = [{ pid: process.pid, ppid: 77777, name: 'node', cmdline: 'node host', createdMs: 1, wsBytes: 0 }]
+  const { route, dispose } = bootRoute({
+    get: (name) => (name === 'dshHomePath' ? () => hostHome : undefined),
+    deps: { sample: async () => ({ procs, degraded: null }) }
+  })
+
+  try {
+    const res = await get(route, '?action=snapshot')
+    assert.equal(res.writes[0].status, 200)
+
+    const rows = await new HistoryStore(hostHome).last(10)
+    assert.ok(rows.find((row) => row.kind === 'findings'), 'the host home received the audit record')
+    assert.equal(fs.existsSync(path.join(envHome, 'treekeeper', 'history.jsonl')), false,
+      '$DSH_HOME is not consulted when the host answers for itself')
+  } finally {
+    dispose()
+    restoreHome()
+  }
+})
+
+test('the snapshot names the host kind and stamps each unattributed row with its signals', async (t) => {
+  t.mock.method(console, 'error', () => {})
+  // The desktop application's Electron set: the main process carries the image
+  // name, its children reach it by ppid. All four are unattributed because they
+  // are the host's siblings rather than its descendants.
+  const desktopMain = { pid: 40376, ppid: 13784, name: 'DeepSeek Harness', cmdline: '"E:\\DSH\\DeepSeek Harness.exe"', createdMs: 1, wsBytes: 0 }
+  const procs = [
+    { pid: process.pid, ppid: 0, name: 'node', cmdline: 'dsh host', createdMs: 1, wsBytes: 0 },
+    desktopMain,
+    { pid: 26928, ppid: 40376, name: 'DeepSeek Harness', cmdline: '"E:\\DSH\\DeepSeek Harness.exe" --type=gpu-process', createdMs: 1, wsBytes: 0 },
+    { pid: 9480, ppid: 40376, name: 'DeepSeek Harness', cmdline: '"E:\\DSH\\DeepSeek Harness.exe" --type=renderer', createdMs: 1, wsBytes: 0 },
+    { pid: 35004, ppid: 0, name: 'node', cmdline: 'node C:\\billion-context\\dist\\index.js start', createdMs: 1, wsBytes: 0 }
+  ]
+  const { route, dispose } = bootRoute({ deps: { sample: async () => ({ procs, degraded: null }) } })
+  t.after(() => dispose())
+
+  const res = await get(route, '?action=snapshot')
+  assert.equal(res.writes[0].status, 200)
+  const body = res.writes[1].body
+
+  // The kind is read from the running process's own facts, so a test host under
+  // node.exe reports `web` even though the desktop app exports
+  // ELECTRON_RUN_AS_NODE to every child it starts.
+  assert.equal(body.hostKind, HOST_KIND_WEB)
+
+  // The bucket keeps every row, ranked by DSH relevance then pid ascending. The
+  // application's own processes share one image name, so all three are marked as
+  // its members; the row whose parent chain leaves the bucket is not, and the
+  // bucket holds all four either way.
+  assert.deepEqual(body.unknown.map((row) => row.pid), [9480, 26928, 40376, 35004])
+  assert.deepEqual(body.unknown.map((row) => row.desktopApp), [true, true, true, false])
+  assert.equal('signals' in body.unknown[0], false, 'the signal ids stay in the host')
+  assert.equal(body.unknown[2].ppid, 13784, 'the main row keeps its parent, which is how the client walks the chain')
+  assert.equal(body.unknown[0].ppid, 40376, 'a child row keeps its parent as well')
 })
 
 test('a browser authorizer states its verdict once per case', async () => {

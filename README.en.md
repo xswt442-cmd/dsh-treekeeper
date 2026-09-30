@@ -18,10 +18,12 @@ A Windows-focused DSH process-tree reconciliation and governance plugin. It puts
 - Sample the current DSH host process tree; other children of the launcher are never attributed to it.
 - Attribute each process to the job that created it, and detect duplicate command lines, orphaned processes and long-running plugin children.
 - Reconcile the job ledger with the root session's subagent descendant tree; the descendant tree of any other session is never read.
-- Guarded tree termination (`taskkill /T /F`); the guard conditions are listed under "Safety and limits".
+- Guarded tree termination (`taskkill /T /F`); the conditions are listed in the termination-guard table under "Safety and limits".
 - Identify the plugin a process belongs to from the `node_modules` path in its command line, and keep finding and termination history.
-- The "DSH host descendants" section is collapsed by default, with its count on the heading.
-- A finding carries one of two confidence tiers: `hard`, confirmed by attribution into the host process tree and eligible for a tree kill, and `inferred`, a heuristic lead only and not eligible.
+- The DSH host descendants section is collapsed by default, with its count on the heading.
+- The panel header shows the host kind, taken from the host process's executable path and command line; the process environment is not part of the decision.
+- The desktop application's own Electron processes are listed as one group inside the unattributed section, and each member keeps its command line, pid, memory and age.
+- A finding carries one of three confidence tiers: `exact`, confirmed by attribution into the host process tree and eligible for a tree kill; `indicative`, where the process fact is real and the attribution link is softer or missing (a degraded sample, or a survivor left by a previous host); `inferred`, produced by a heuristic rule alone and never eligible.
 - The `dsh-mini-utility-dock` launcher at the bottom-left opens the global panel, a session header opens it focused on that session, and a sidebar Session row shows the cached facts for that session.
 
 ## Install
