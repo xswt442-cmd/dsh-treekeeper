@@ -3,6 +3,13 @@
 Release notes are generated from the matching version section; newest first.
 For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
+## 0.4.1 - 2026-10-19
+
+### Maintenance
+
+- The compatibility range includes DSH `0.2.1-rc.2`.
+- The README's "remote reach" row now reads "listening on a non-loopback address": starting with DSH `0.2.1-rc.2`, the webserver rejects wildcard addresses such as `0.0.0.0` and `::`, so the original wording no longer holds.
+
 ## 0.4.0 - 2026-09-30
 
 ### Fixed
