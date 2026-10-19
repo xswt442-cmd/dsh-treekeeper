@@ -18,6 +18,8 @@
 - 采样当前 DSH 宿主的进程树，启动器的其他子进程不归入该树。
 - 把每个进程归属到创建它的任务，并检测重复命令、孤儿进程与长时间运行的插件子进程。
 - 对照任务账本与根 session 的 subagent 子代理树，其他 session 的子代理树不读取。
+- 跨会话普查：列出全部 session 的存活子代理，而不只是当前选中的那一棵。
+- 释放驻留子代理：归还它的容量槽。in-process 的 spawn / fork 子代理是同进程里的一个 Agent，没有可杀的 OS 进程，因此释放走宿主原语而不是 `taskkill`。默认关闭。
 - 受保护的整树终止（`taskkill /T /F`），条件列在安全与边界的终止护栏表中。
 - 从命令行中的 `node_modules` 路径识别进程所属插件，findings 与终止操作历史写入记录文件。
 - DSH 宿主子进程分区默认收起，数量显示在标题上。
@@ -74,7 +76,30 @@ Subagent 分区有三种状态：
 | --- | ---: | --- | --- |
 | `pollMs` | `0` | `0`（按请求采样）或 2000–600000 ms | 后台采样间隔 |
 | `allowKill` | `true` | 布尔值 | 受保护的进程树终止开关 |
+| `allowRelease` | `false` | 布尔值 | 驻留子代理释放开关，与 `allowKill` 分开 |
 | `extraWhitelistPids` | `[]` | PID 数组 | 额外受保护的 PID |
+
+## 驻留子代理释放
+
+释放与树杀是两种不同的处置：
+
+- **释放**归还一个驻留子代理占着的容量槽（默认容量 8，按顶层会话一个池）。它走宿主公开原语 `drainChildren`。释放之后这个子代理不能再被 `send_message` 继续。
+- **停止当前 turn** 只停当前这一轮，不释放驻留。子代理仍然占着容量槽，仍然可以被继续对话。本插件不做这个动作。
+
+驻留子代理可能根本没有对应的 OS 进程——in-process 的 `spawn` / `fork` 子代理就是宿主进程里的一个 Agent。因此释放**不会**附带任何 `taskkill`：树杀会连带结束它自己的后代树，而那与释放无关。
+
+释放护栏：
+
+| 护栏 | 规则 |
+| --- | --- |
+| 开关 | `allowRelease` 默认关闭，与 `allowKill` 分开；打开终止开关不打开释放开关 |
+| 确认 | 第一次点击进入待确认（6 秒），第二次点击弹出确认框 |
+| 父 | 父必须是注册表里精确存活的 Agent |
+| 直接子代 | 目标必须是该父的直接子代，用 agents 谱系核 |
+| 父会话来源 | 父会话由服务端谱系反查，请求体里的 `parentId` 不参与判定 |
+| 读面 | 只读 `session.header` 的 `parentSession` / `origin` 与 `Agent.status`，不读会话内容，不读日志 |
+
+插件不报容量上限数字：`ctx.subagents.maxActiveSubagents` 是 Volatile 配置且为 private，读不到。
 
 ## 安全与边界
 
@@ -87,9 +112,9 @@ Subagent 分区有三种状态：
 | 准入：宿主有 Connection | 由 Connection 的 Host/Origin 校验与签名 cookie 决定 |
 | 准入：宿主无 Connection | 由本插件守卫按 TCP 对端地址、Fetch Metadata、Origin 与 loopback Host 判定 |
 | 写操作 | 仅接受 POST |
+| 遍历取消 | 页面关闭、刷新被替代或 HTTP 断开时，进行中的 subagent 子代理树遍历与跨会话普查收到取消信号 |
 | 远端可达 | 宿主配置 `trustedHosts` 且在非回环地址上监听时，持有有效浏览器会话的远端可调用包括 `kill` 在内的接口 |
 | 准入收窄 | 本插件不额外收窄宿主的 Connection 准入，终止护栏在该情形下同样适用 |
-| 遍历取消 | 页面关闭、刷新被替代或 HTTP 断开时，进行中的 subagent 子代理树遍历收到取消信号 |
 
 终止护栏：
 

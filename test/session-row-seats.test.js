@@ -120,6 +120,19 @@ function snapshot() {
   }
 }
 
+/** 跨会话普查的响应形状：按父分组，父由宿主谱系给出。 */
+function census() {
+  return {
+    ok: true,
+    availability: 'available',
+    releaseEnabled: false,
+    parents: [
+      { parentId: 'session-a', children: [{ id: 'child-1', status: 'idle', depth: 1 }] },
+      { parentId: 'session-b', children: [{ id: 'child-9', status: 'idle', depth: 1 }] }
+    ]
+  }
+}
+
 function boot({ runEffects = false } = {}) {
   const react = makeFakeReact({ runEffects })
   const registered = []
@@ -141,7 +154,10 @@ function boot({ runEffects = false } = {}) {
     window: { addEventListener() {}, removeEventListener() {}, __ModuleLoader__: { load() {} } },
     fetch: async (url, options) => {
       fetches.push({ url, options })
-      return { ok: true, status: 200, json: async () => snapshot() }
+      // 普查是独立 action，回答的形状与快照不同；夹具按 url 分派，两条请求各自
+      // 得到宿主会给出的那份负载。
+      const body = String(url).includes('action=census') ? census() : snapshot()
+      return { ok: true, status: 200, json: async () => body }
     }
   }
   let definition = null
@@ -282,11 +298,15 @@ test('the panel load fills the cache the row seats read, with one request for th
   renderNode(panel.render(), react)
   await new Promise((resolve) => setTimeout(resolve, 0))
 
-  assert.deepEqual(fetches.map((call) => call.url), ['/dsh-treekeeper/api?action=snapshot&rootSessionId=session-a'])
+  // 面板自己发两条：聚焦根的快照与跨会话普查。普查不带根——它覆盖全部会话。
+  assert.deepEqual(fetches.map((call) => call.url), [
+    '/dsh-treekeeper/api?action=snapshot&rootSessionId=session-a',
+    '/dsh-treekeeper/api?action=census'
+  ])
   assert.deepEqual([...plugin._tkTest.sessionFactIds()], ['session-a'])
 
   const leading = seat(registered, 'sidebar.session.row.leading')
   assert.ok(mountOccupant(leading, { sessionId: 'session-a' }, react))
   assert.equal(mountOccupant(leading, { sessionId: 'session-b' }, react), null)
-  assert.equal(fetches.length, 1, 'the seats must not add a request per row')
+  assert.equal(fetches.length, 2, 'the seats must not add a request per row')
 })

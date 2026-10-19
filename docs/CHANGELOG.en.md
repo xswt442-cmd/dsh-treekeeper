@@ -5,6 +5,11 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
 ## Unreleased
 
+### Added
+
+- A cross-session subagent census listing the live subagents of every session, not only the currently selected tree.
+- Resident subagents can be released to return their capacity slot, through a host primitive rather than `taskkill`. Off by default and separate from the termination switch.
+
 ### Fixed
 
 - The job ledger reads its owned jobs again: a session's running-job count and a finding's session ownership were both permanently empty.

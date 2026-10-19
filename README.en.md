@@ -18,6 +18,8 @@ A Windows-focused DSH process-tree reconciliation and governance plugin. It puts
 - Sample the current DSH host process tree; other children of the launcher are never attributed to it.
 - Attribute each process to the job that created it, and detect duplicate command lines, orphaned processes and long-running plugin children.
 - Reconcile the job ledger with the root session's subagent descendant tree; the descendant tree of any other session is never read.
+- A cross-session census listing the live subagents of every session, not only the currently selected tree.
+- Release a resident subagent and return its capacity slot. An in-process `spawn` / `fork` subagent is one Agent inside the same process with no killable OS process behind it, so release goes through a host primitive rather than `taskkill`. Off by default.
 - Guarded tree termination (`taskkill /T /F`); the conditions are listed in the termination-guard table under "Safety and limits".
 - Identify the plugin a process belongs to from the `node_modules` path in its command line, and keep finding and termination history.
 - The DSH host descendants section is collapsed by default, with its count on the heading.
@@ -74,7 +76,30 @@ Configuration is process-local and resets on restart.
 | --- | ---: | --- | --- |
 | `pollMs` | `0` | `0` (sample on request) or 2000–600000 ms | Background sampling interval |
 | `allowKill` | `true` | Boolean | Enables guarded process-tree termination |
+| `allowRelease` | `false` | Boolean | Enables resident-subagent release, separate from `allowKill` |
 | `extraWhitelistPids` | `[]` | Array of PIDs | Additional protected PIDs |
+
+## Releasing a resident subagent
+
+Release and tree termination are two different operations:
+
+- **Release** returns the capacity slot a resident subagent holds (8 by default, one pool per top-level session). It goes through the host's public `drainChildren` primitive. The subagent can no longer be continued with `send_message` afterwards.
+- **Stopping the current turn** ends only that turn and keeps the residency: the subagent still holds its capacity slot and can still be continued. This plugin does not perform it.
+
+A resident subagent may have no OS process behind it at all — an in-process `spawn` / `fork` subagent is one Agent inside the host process. Release therefore never carries a `taskkill` along: a tree kill takes the target's own descendant tree with it, which has nothing to do with releasing.
+
+Release guards:
+
+| Guard | Rule |
+| --- | --- |
+| Switch | `allowRelease` is off by default and separate from `allowKill`; enabling termination does not enable release |
+| Confirmation | The first click arms for 6 seconds, the second click opens the confirmation dialog |
+| Parent | The parent must be the exact live Agent in the registry |
+| Direct child | The target must be a direct child of that parent, checked against the agents lineage |
+| Parent source | The parent is resolved from the server-side lineage; a `parentId` in the request body takes no part in the decision |
+| Read surface | Only `session.header`'s `parentSession` / `origin` and `Agent.status` are read; no session content and no log |
+
+The plugin reports no capacity figure: `ctx.subagents.maxActiveSubagents` is a Volatile, private setting and cannot be read.
 
 ## Safety and limits
 
@@ -89,7 +114,7 @@ Configuration is process-local and resets on restart.
 | Mutating actions | POST-only |
 | Remote reach | On a host configured with `trustedHosts` and listening on a non-loopback address, a remote peer holding a valid browser session reaches the API, `kill` included |
 | Admission narrowing | This plugin does not narrow the host's Connection admission, and the kill guards below apply there as well |
-| Traversal cancellation | Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal |
+| Traversal cancellation | Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal and the cross-session census |
 
 Kill guards:
 
