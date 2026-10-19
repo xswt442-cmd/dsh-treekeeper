@@ -1,11 +1,9 @@
-// The dock's fourth fragment, `dsh-host-http`, in this repository's shape.
+// 本仓库内嵌的宿主 HTTP 片段 `dsh-host-http`。
 //
-// Why this is asserted here and not only by `http:check`: a check compares only
-// the markers its pinned dock version knows, so this file is what notices a
-// missing, duplicated or out-of-order block. It also holds the reply contract the
-// block carries: the `no-store` posture on every way out of it, the POST gate
-// with this plugin's published `method` code, the bounded session id, and the
-// browser authorizer whose decision order is the security property.
+// 除了 `http:check` 之外仍要在这里断言：检查只比较它固定的 dock 版本认识的标记，
+// 因此缺块、重复块与顺序错误由本文件发现。它同时覆盖片段携带的响应约定：每条
+// 出口都带 `no-store`，POST 门使用本插件公布的 `method` 错误码，会话 id 有长度
+// 上限，以及浏览器授权器的判定顺序（那是安全属性）。
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -39,9 +37,8 @@ test('lib/shared.js carries exactly one host-HTTP block, below the guard', () =>
     assert.equal(close, 1, `${name} closing marker count`)
   }
 
-  // The order is load-bearing: the guard reads the predicates the loopback block
-  // declares, and the HTTP glue lands below both where this file's own glue used
-  // to be. A block moved above the guard would still parse and still sync.
+  // 顺序有实际作用：守卫读取 loopback 块声明的判断函数，HTTP 胶水位于两者下方。
+  // 把某个块移到守卫上方仍然能解析，也仍然能通过同步检查。
   assert.ok(
     SHARED.indexOf(marker('dsh-loopback-helpers', '')) < SHARED.indexOf(marker('dsh-host-guard', '')),
     'the guard block must sit below the predicates it uses'
@@ -72,13 +69,13 @@ test("the POST gate keeps this plugin's published vocabulary", () => {
   assert.equal(rejected.status, 405)
   assert.deepEqual(rejected.body, { ok: false, code: 'method', error: 'action "kill" requires POST' })
 
-  // An absent method is GET, which is not a mutation.
+  // 没有 method 读作 GET，不属于会改变状态的请求。
   const noMethod = response()
   assert.equal(requirePost({}, noMethod, 'config'), false)
   assert.deepEqual(noMethod.body, { ok: false, code: 'method', error: 'action "config" requires POST' })
 
-  // Only one reason is overridable, and a typo is an error rather than a silent
-  // no-op that would publish a code no test expects.
+  // 只有一个原因可以覆盖，键名写错会抛错，而不是静默无效、公布一个没有测试
+  // 期待的错误码。
   assert.deepEqual(REQUIRE_POST_REASONS, ['method_not_allowed'])
   assert.throws(() => createRequirePost({ policy: { methd_not_allowed: {} } }), /unknown policy key/)
   const custom = response()
@@ -87,14 +84,13 @@ test("the POST gate keeps this plugin's published vocabulary", () => {
 })
 
 test('no way out of the block drops the no-store posture', () => {
-  // The posture is a property of the reply, not of a call site that remembered
-  // to add a header, so it is asserted on every way the block itself answers:
-  // the default sink of `connectionUnavailable`, the POST gate's 405, and each
-  // authorization refusal.
+  // 这是响应本身的属性，不取决于某个调用点是否记得加响应头，因此对片段自己
+  // 作答的每条出口都断言：`connectionUnavailable` 的默认接收函数、POST 门的 405，
+  // 以及每种授权拒绝。
   const sendJsonRes = response()
   assert.equal(connectionUnavailable(sendJsonRes), false, 'one call hands back the refusal')
-  // Called with no sink at all, which is how a route uses it: the posture can
-  // only arrive here if the default really is this block's `sendJson`.
+  // 完全不传接收函数，路由就是这样使用它的：只有默认值确实是本片段的
+  // `sendJson`，响应头才可能出现在这里。
   assert.equal(sendJsonRes.writes[0].headers['cache-control'], 'no-store')
   assert.deepEqual(sendJsonRes.writes[1].body, CONNECTION_UNAVAILABLE)
 
@@ -122,8 +118,8 @@ test('no way out of the block drops the no-store posture', () => {
 test('connectionUnavailable states the one 503 payload', () => {
   assert.deepEqual(CONNECTION_UNAVAILABLE, { ok: false, code: 'connection_unavailable', error: 'browser authentication unavailable' })
   assert.throws(() => { CONNECTION_UNAVAILABLE.code = 'x' }, TypeError, 'the shared payload is frozen')
-  // A route that composes its own reply injects the sink; the argument order is
-  // (res, respond), the same shape the guard block's binders use.
+  // 自己组装回复的路由注入接收函数；参数顺序是 (res, respond)，与守卫块的绑定器
+  // 一致。
   const res = response()
   const written = []
   assert.equal(connectionUnavailable(res, (r, status, body) => { written.push({ status, body }); r.writeHead(status, {}); r.end(JSON.stringify(body)) }), false)
@@ -141,15 +137,14 @@ test('the browser authorizer decision order is the security property', () => {
     guard
   })
 
-  // 1. No Connection and none ever seen: a pre-RC1 host, so this plugin's own
-  //    guard is the whole boundary.
+  // 1. 没有 Connection，也从未有过：说明是 RC1 之前的宿主，本插件自己的守卫就是
+  //    整个边界。
   authorize.connection = null
   authorize.seen = false
   assert.equal(authorize({}, response()), true)
   assert.deepEqual(calls, ['guard'])
 
-  // 2. A Connection that throws cannot permit: 503, the guard is not consulted,
-  //    and the handler is not entered.
+  // 2. 抛错的 Connection 不能放行：回答 503，不询问守卫，也不进入处理函数。
   authorize.connection = { requestRejection: () => { throw new Error('disposed') } }
   const thrown = response()
   assert.equal(authorize({}, thrown), false)
@@ -157,8 +152,7 @@ test('the browser authorizer decision order is the security property', () => {
   assert.deepEqual(thrown.body, CONNECTION_UNAVAILABLE)
   assert.deepEqual(calls, ['guard'], 'a throwing Connection must not fall back to the guard')
 
-  // 3. A rejection code is final: 401 is the browser's to clear, anything else
-  //     is this plugin's refusal.
+  // 3. 拒绝码就是最终结果：401 由浏览器处理，其他码都是本插件的拒绝。
   for (const [code, expected] of [[401, 'unauthorized'], [403, 'forbidden']]) {
     authorize.connection = { requestRejection: () => code }
     const res = response()
@@ -167,15 +161,15 @@ test('the browser authorizer decision order is the security property', () => {
     assert.equal(res.body.code, expected)
   }
 
-  // 4. A reload gap after a Connection existed: 503, and deliberately NOT the
-  //    weaker loopback fence — a local socket peer is not an authorized browser.
+  // 4. Connection 存在过之后的重载间隙：回答 503，绝不退回较弱的回环围栏——本地
+  //    套接字对端与已授权的浏览器不是一回事。
   authorize.connection = null
   authorize.seen = true
   const gap = response()
   assert.equal(authorize({}, gap), false)
   assert.equal(gap.status, 503)
   assert.deepEqual(gap.body, CONNECTION_UNAVAILABLE)
-  assert.deepEqual(calls, ['guard'], 'the guard must not run once a Connection has existed')
+  assert.deepEqual(calls, ['guard'], 'Connection 存在过之后守卫不能再运行')
 })
 
 test('the authorizer reads its accessors per request and demands them as functions', () => {
@@ -187,9 +181,9 @@ test('the authorizer reads its accessors per request and demands them as functio
   })
   authorize({}, response())
   authorize({}, response())
-  assert.equal(reads, 2, 'a captured Connection would keep authorizing a disposed one')
+  assert.equal(reads, 2, '捕获的 Connection 会一直为已销毁的实例授权')
 
-  // A value instead of an accessor is the mistake the signature exists to catch.
+  // 传值而不是访问器，正是这个签名要拦下的错误。
   assert.throws(() => createBrowserAuthorizer({ getConnection: null, getConnectionSeen: () => false, guard: () => true }), /must be an accessor/)
   assert.throws(() => createBrowserAuthorizer({ getConnection: () => null, getConnectionSeen: true, guard: () => true }), /must be an accessor/)
   assert.throws(() => createBrowserAuthorizer({ getConnection: () => null, getConnectionSeen: () => false }), /guard is required/)
@@ -207,8 +201,8 @@ test('optionalSessionId bounds what reaches a session lookup', () => {
   assert.equal(optionalSessionId('x'.repeat(513)), null)
 })
 
-// Untrusted numeric input: a coerced pid or interval is a value the caller never
-// sent, and here those two pick what dies and how often the machine is sampled.
+// 不可信的数值输入：被强转出来的 pid 或间隔是调用方从未发送的值，而这两个值在这里
+// 决定结束哪个进程、以及整台机器多久被采样一次。
 test('numeric input is narrowed the way a port is, never coerced', () => {
   assert.equal(normalizePidInput(4234), 4234)
   assert.equal(normalizePidInput('4234'), 4234)

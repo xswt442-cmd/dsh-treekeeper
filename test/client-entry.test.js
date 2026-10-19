@@ -91,10 +91,9 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
     on() {}
   })
 
-  // Six registrations: this plugin's row in the launcher menu, the shared
-  // launcher it claims when it loads first (reached through inject, because that
-  // seat belongs to the shell), the overlay panel, the session-scope header
-  // action, and the two DTK-M3 ambient Session-row seats.
+  // 六次注册：本插件在启动器菜单里的行、它作为第一个加载者声明的共享启动器
+  // （通过 inject 到达，因为那个座位属于 shell）、overlay 面板、会话标题栏操作，
+  // 以及侧边栏会话行的两个常驻座位。
   assert.deepEqual(injected, ['createhelper.utility.item', 'shell.overlay', 'shell.overlay', 'conversation.session.header.actions', 'sidebar.session.row.leading', 'sidebar.session.row.hover'])
   assert.equal(registered.length, 6)
   assert.equal(registered[0].options.name, 'createhelper.utility.item')
@@ -120,9 +119,7 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
   assert.equal(registered[5].options.order, 20)
   assert.equal(typeof registered[5].render, 'function')
   assert.equal(localeNamespace, 'dsh-treekeeper')
-  // The retired page-local dock is what floated its own container over the
-  // composer; the host's overlay layer holds the launcher now, so nothing may
-  // append a container to body again.
+  // 容器由宿主的 overlay 层承载，客户端不能再往 body 追加自己的浮动容器。
   assert.equal(context.window.__CREATEHELPER_DSH_UTILITY_DOCK_V1__, undefined)
   assert.doesNotMatch(source, /getUtilityDock|CREATEHELPER_DSH_UTILITY_DOCK/)
   assert.equal(dockRoot, null, 'the client must not append a floating container to body')

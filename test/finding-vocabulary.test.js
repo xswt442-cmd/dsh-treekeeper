@@ -1,6 +1,5 @@
-// DTK-M1: the finding vocabulary is data, so it is asserted as data. This
-// file pins rule / confidence / ownership for the three rules across the
-// scenarios that matter: full sample, degraded sample, no attribution.
+// 发现的词表以数据形式提供，因此也以数据形式断言。本文件在三种场景（完整采样、
+// 降级采样、无归因）下锁定每条规则的 rule / confidence / ownership。
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -40,20 +39,20 @@ test('each heuristic names its own rule even when called on its own', () => {
 })
 
 test('provenance pairs every rule id with a human-readable description', () => {
-  // The description domain covers the whole rule domain, and nothing else.
+  // 说明的键集合覆盖整个规则集合，不多也不少。
   assert.deepEqual(Object.keys(FINDING_RULE_DESCRIPTION).sort(), [...FINDING_RULE].sort())
   for (const description of Object.values(FINDING_RULE_DESCRIPTION)) {
     assert.equal(typeof description, 'string')
     assert.ok(description.length > 0)
   }
 
-  // Standalone finders carry it, so the field exists on every production path.
+  // 单独调用的查找函数也会带上它，因此每条生产路径上这个字段都存在。
   const dup = findDuplicates([proc(1, 9, MCP), proc(2, 9, MCP), proc(3, 9, MCP)], { minCopies: 3 })
   assert.deepEqual(dup[0].provenance, findingProvenance('duplicate.cmdline'))
   assert.equal(dup[0].provenance.rule, 'duplicate.cmdline')
   assert.equal(dup[0].provenance.description, FINDING_RULE_DESCRIPTION['duplicate.cmdline'])
 
-  // Unknown rule ids degrade to a null description instead of throwing.
+  // 未知规则 id 得到 null 说明，不会抛错。
   assert.deepEqual(findingProvenance('future.rule'), { rule: 'future.rule', description: null })
 })
 
@@ -79,15 +78,15 @@ test('a full sample inside the host tree is exact via the parent chain', () => {
     scope: 'host-descendant', via: 'ppid-chain',
     rootLabel: 'harness', depth: 1, session: null, job: null
   })
-  // The legacy payload the UI reads stays intact.
+  // 界面读取的旧负载字段保持原样。
   assert.equal(finding.evidence.sample, MCP)
   assert.equal(finding.type, 'duplicate')
   assert.equal(typeof finding.detail, 'string')
 })
 
 test('a finding whose first pid is the host root is attributed to itself', () => {
-  // The stamp describes the group's first pid; with the root first it must
-  // say root-itself at depth 0 rather than inventing a parent.
+  // 戳记描述的是这组进程的第一个 pid；根排在最前时，它必须说 depth 0 的
+  // root-itself，而不是编造一个父进程。
   const procs = [proc(1, 0, MCP), proc(2, 1, MCP), proc(3, 1, MCP)]
   const attribution = attribute(procs, new Map([[1, 'harness']]))
   const findings = collectFindings(procs, attribution, { minCopies: 3 })
@@ -105,16 +104,16 @@ test('degraded sampling caps confidence at indicative', () => {
   assert.equal(findingConfidence({ attributed: true, degraded: 'no-ppid' }), 'indicative')
   assert.equal(findingConfidence({ attributed: false, degraded: null }), 'inferred')
 
-  // Wired end to end: the same rows lose `exact` once the sampler degraded.
+  // 端到端接通：同样的行在采样降级后失去 `exact`。
   const procs = [proc(1, 0, 'node host.js'), proc(2, 1, MCP), proc(3, 1, MCP), proc(4, 1, MCP)]
   const attribution = attribute(procs, new Map([[1, 'harness']]))
   const findings = collectFindings(procs, attribution, { minCopies: 3, degraded: 'no-ppid' })
   assert.equal(findings.length, 1)
   assert.equal(findings[0].confidence, 'indicative')
-  assert.equal(findings[0].ownership.via, 'ppid-chain', 'degraded softens the level, it does not drop the chain')
+  assert.equal(findings[0].ownership.via, 'ppid-chain', '降级只压低等级，不会丢掉链条')
 
-  // A real degraded sample (tasklist: no ppid, no cmdline, no creation time)
-  // can fire none of the rules, which is why the UI disables tree kill.
+  // 真实的降级采样（tasklist：无 ppid、无命令行、无创建时间）触发不了任何规则，
+  // 界面因此停用树杀。
   const degradedProcs = [
     { pid: 1, ppid: 0, name: 'node', cmdline: '', createdMs: null, wsBytes: 0 },
     { pid: 2, ppid: 0, name: 'node', cmdline: '', createdMs: null, wsBytes: 0 }
@@ -129,8 +128,8 @@ test('an unattributed process is inferred through no chain at all', () => {
   })
   assert.equal(findingConfidence({ attributed: false }), 'inferred')
 
-  // The investigation bucket never reaches collectFindings (it would flood
-  // the panel with Windows services), so M3 renders it with this stamp.
+  // 排查集合不会进入 collectFindings（那会让面板被 Windows 服务淹没），因此界面
+  // 用这个戳记单独渲染它。
   const procs = [proc(1, 0, 'node host.js'), proc(50, 4242, MCP), proc(51, 4242, MCP), proc(52, 4242, MCP)]
   const attribution = attribute(procs, new Map([[1, 'harness']]))
   const findings = collectFindings(procs, attribution, { minCopies: 3 })
@@ -148,10 +147,10 @@ test('the ledger join adds the session and job links to ownership', () => {
     scope: 'session', via: 'job-label',
     rootLabel: 'harness', depth: 1, session: 'session-1', job: 'bash-1'
   })
-  assert.equal(findings[0].confidence, 'exact', 'an indicative join never raises the level')
+  assert.equal(findings[0].confidence, 'exact', '指示性的对账不会抬高置信等级')
 
-  // A job without an owner session is less specific, and a later snapshot
-  // without that job must fall back to the OS chain (idempotent refresh).
+  // 没有 ownerSession 的任务更宽泛；之后一份不含该任务的快照必须退回操作系统
+  // 链条（刷新是幂等的）。
   applyLedgerOwnership(findings, [{ source: 'job', id: 'bash-2', pids: [2], ownerSession: null }])
   assert.equal(findings[0].ownership.scope, 'job')
   assert.equal(findings[0].ownership.session, null)
@@ -169,8 +168,8 @@ test('the previous-host rule stays inside the declared domains', () => {
   const procs = [
     proc(1, 0, 'node host.js'),
     proc(2, 1, 'node host-child.js'),
-    // The leftover a killed host leaves: no live parent, no attribution chain,
-    // but the desktop bundle path is still in its command line.
+    // 被结束的宿主留下的残留：没有存活的父进程，没有归因链，但桌面包的路径仍在
+    // 命令行里。
     proc(99, 8888, 'node E:\\DSH\\resources\\app.asar\\dsh\\node_modules\\@deepseek-ai\\dsh-desktop-host\\lib\\index.js')
   ]
   const attribution = attribute(procs, new Map([[1, 'harness']]))
@@ -179,7 +178,7 @@ test('the previous-host rule stays inside the declared domains', () => {
   assert.equal(findings.length, 1)
   const [finding] = findings
   assert.equal(finding.rule, 'orphan.previous-host')
-  // Indicative, not inferred: the evidence is real, the link to this host is not.
+  // 指示性，不是推断：证据是真实的，与当前宿主的链接不是。
   assert.equal(finding.confidence, 'indicative')
   assert.ok(FINDING_CONFIDENCE.includes(finding.confidence))
   assert.equal(finding.ownership.scope, 'unattributed')
@@ -194,10 +193,8 @@ test('the previous-host rule stays inside the declared domains', () => {
 
 test('every collected finding stays inside the declared domains', () => {
   const old = Date.now() - 45 * 60 * 1000
-  // Pid 5 is an extra whitelisted root: the orphan rule can only fire on a
-  // root, because collectFindings() pre-filters to attributed processes and
-  // attribution walks live parent links — a reachable child always has its
-  // parent in the snapshot. (Worth revisiting in M3; not changed here.)
+  // pid 5 是额外的登记根：孤儿规则只能命中根，因为 collectFindings() 先筛出已
+  // 归因的进程，而归因沿存活的父链向下走——可达的子进程一定在快照里有父进程。
   const procs = [
     proc(1, 0, 'node host.js'),
     proc(2, 1, MCP), proc(3, 1, MCP), proc(4, 1, MCP),

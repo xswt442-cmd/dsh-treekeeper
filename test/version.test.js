@@ -1,12 +1,11 @@
-// Version bookkeeping.
+// 版本记录。
 //
-// Three places carry the version and they are only useful in lockstep:
-//   - package.json        what npm publishes
-//   - lib/shared.js       what the running panel reports
-//   - docs/CHANGELOG.md   what publish.yml cuts the release notes from
-// A drift between the first two fails CI at the tag; a drift in the third
-// does not fail anything, it just silently ships notes that say
-// "Release x.y.z" and nothing else. This test makes all three loud.
+// 三处都带版本号，只有保持一致才有意义：
+//   - package.json        npm 发布的内容
+//   - lib/shared.js       运行中的面板报告的版本
+//   - docs/CHANGELOG.md   publish.yml 从这里截取发布说明
+// 前两处不一致会在打标签时让 CI 失败；第三处不一致不会让任何检查失败，只会悄悄
+// 发布一段除“Release x.y.z”外没有内容的说明。这个测试让三处都发出声音。
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -19,9 +18,9 @@ test('VERSION stays in lockstep with package.json', () => {
 })
 
 test('both CHANGELOGs contain the version being shipped', () => {
-  // Existence, not position: publish.yml starts collecting at the heading that
-  // matches PKG_VERSION, so an `## Unreleased` section above it is harmless.
-  // What actually breaks releases is no matching section at all -> empty notes.
+  // 只要求存在，不要求位置：publish.yml 从匹配 PKG_VERSION 的标题开始收集，因此
+  // 在它上面放一个 `## Unreleased` 节没有影响。真正会破坏发布的是完全没有匹配
+  // 的节，发布说明会是空的。
   const heading = new RegExp(`^## ${VERSION.replace(/\./g, '\\.')}(\\s|$)`)
   for (const file of ['../docs/CHANGELOG.md', '../docs/CHANGELOG.en.md']) {
     const sections = read(file).split('\n').filter((line) => line.startsWith('## '))

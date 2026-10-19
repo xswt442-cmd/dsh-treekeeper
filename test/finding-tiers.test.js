@@ -1,9 +1,7 @@
-// DTK-M1 UI noise policy, asserted against the real Panel tree: findings with
-// an attribution chain render expanded with kill buttons, findings without one
-// collapse behind a closed <details> and never get one. The host's three
-// confidence levels are counted and displayed separately, each in its own
-// bucket. Payloads from older builds (no confidence field) must stay visible at
-// the `exact` level.
+// 界面的噪音策略，针对真实的 Panel 树断言：带归因链的发现展开显示并提供终止
+// 按钮；没有链条的发现收进默认关闭的 <details>，永远拿不到按钮。宿主的三个置信
+// 等级分别计数、分别显示。来自旧负载的数据（没有 confidence 字段）必须仍然以
+// `exact` 等级可见。
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -14,10 +12,8 @@ const SOURCE = fs.readFileSync(new URL('../lib/client.js', import.meta.url), 'ut
 const MCP = 'cmd /c npx -y @upstash/context7-mcp'
 
 /**
- * Minimal fake React: enough hooks for TreeKeeperSurface plus an element
- * walker, so the Panel tree can be inspected without a DOM. Hook slots are
- * reset per component invocation, so the launcher's hooks stay separate from
- * the surface's.
+ * 最小假 React：够 TreeKeeperSurface 使用，再加一个元素遍历器，没有 DOM 也能
+ * 检查 Panel 树。hook 槽位在每次组件调用时重置，启动器的 hook 与面板的互不干扰。
  */
 let fakeReact = null
 function makeFakeReact() {
@@ -36,10 +32,10 @@ function makeFakeReact() {
       if (!(i in hookStates)) hookStates[i] = { current: initial }
       return hookStates[i]
     },
-    useEffect() { /* effects are out of scope: no fetch, no listeners */ },
+    useEffect() { /* 不执行 effect：没有请求，也没有监听器 */ },
     _resetHooks() { hookIndex = 0 },
-    // TreeKeeperSurface fetches inside an effect; tests seed its useState
-    // slots directly (0 useRef, 1 tick, 2 data, 3 error, 4 loading, 5 armed).
+    // TreeKeeperSurface 在 effect 里取数据；测试直接写入它的 useState 槽位
+    // （0 useRef，1 tick，2 data，3 error，4 loading，5 armed）。
     _seed(index, value) { hookStates[index] = value }
   }
   fakeReact = react
@@ -121,9 +117,8 @@ function boot(data) {
     on() {}
   })
 
-  // Open the panel the way a user does: render the sidebar-footer launcher,
-  // click it, then render the panel surface by hand (effects are skipped, so no
-  // fetch happens).
+  // 按用户的操作打开面板：渲染启动器、点击它，再手动渲染面板表面（effect 被跳过，
+  // 因此不会发生请求）。
   react._seed(2, data)
   react._seed(4, false)
   const launcher = registered.find((entry) => entry.options.id === 'utility-launcher')
@@ -175,15 +170,14 @@ function fixtureData() {
         evidence: { parentPid: 4242, name: 'node' }
       },
       {
-        // Pre-M1 payload shape: no confidence / ownership / provenance.
+        // 没有 confidence / ownership / provenance 的旧负载形状。
         type: 'duplicate', key: 'legacy:1', pids: [6], detail: 'payload from an older build',
         evidence: { sample: 'legacy cmd' }
       }
     ],
     unknown: [],
-    // Rows carry `attribution` because `processRows()` attaches it; kill
-    // authorization is derived from it, so a fixture without it would test a
-    // payload the host never produces.
+    // 行带上 `attribution`，因为 `processRows()` 会附带它；终止授权由它推出，
+    // 缺了它的夹具测的就不是宿主真实产生的负载。
     processes: [
       { pid: 2, ppid: 100, name: 'node', cmdline: MCP, createdMs: now - 60000, wsBytes: 0, evidence: 'exact', attribution: hostAttribution(1) },
       { pid: 5, ppid: 0, name: 'node', cmdline: 'node mcp.js', createdMs: now - 60000, wsBytes: 0, evidence: 'unattributed', attribution: null },
@@ -206,7 +200,7 @@ test('attributed findings stay expanded with kill buttons; chainless ones collap
   const { surface } = boot(data)
   const panel = panelOf(surface, data)
 
-  // The collapsed bucket is exactly one closed <details> disclosure.
+  // 收起的分区正好是一个默认关闭的 <details> 披露区。
   const disclosures = allNodes(panel, (node) => node.type === 'details' && node.props.className === 'tk-disclosure')
   const inferred = disclosures.find((node) => textOf(node).includes('Findings without an attribution chain'))
   assert.ok(inferred, 'the investigation disclosure exists')
@@ -217,15 +211,15 @@ test('attributed findings stay expanded with kill buttons; chainless ones collap
   assert.equal(allNodes(inferred, (node) => node.props?.className === 'tk-btn').length, 0,
     'a collapsed finding is never a kill candidate, even with a known createdMs')
 
-  // Attributed rows live outside that disclosure and keep their kill buttons.
+  // 已归因的行位于那个披露区之外，保留自己的终止按钮。
   const rows = allNodes(panel, (node) => node.props?.className === 'tk-row')
   assert.match(textOf(panel), /exact longlived/)
   assert.match(textOf(panel), /longlived\.plugin-child · host-descendant/)
   assert.match(textOf(panel), /exact duplicate/)
   assert.match(textOf(panel), /payload from an older build/, 'a payload without confidence stays visible at the exact level')
 
-  // Every killable attributed finding row (single pid, known createdMs) carries
-  // its own button; the collapsed row never does even with createdMs available.
+  // 每条可终止的已归因发现行（单个 pid、创建时间已知）都带自己的按钮；收起的那
+  // 一行即使有创建时间也永远不带。
   for (const label of ['exact longlived', 'payload from an older build']) {
     const row = rows.find((node) => !containsNode(inferred, node) && textOf(node).includes(label))
     assert.ok(row, 'attributed finding row visible: ' + label)
@@ -235,9 +229,8 @@ test('attributed findings stay expanded with kill buttons; chainless ones collap
 
 test('kill buttons follow harness attribution, not evidence alone (REVIEW-0904 P1)', () => {
   const data = fixtureData()
-  // A whitelisted root's descendant is attributed, so `evidence` says 'exact',
-  // but it is not the DSH host tree: offering a kill button there would both
-  // lie about what the server accepts and turn a protection into an expansion.
+  // 登记根的后代是“已归因”的，`evidence` 会说 'exact'，但它不属于 DSH 宿主树：
+  // 在那里提供终止按钮既谎报服务器会接受，也把保护变成了扩大范围。
   data.processes.push({
     pid: 7, ppid: 100, name: 'node', cmdline: 'pinned child', createdMs: Date.now() - 60000, wsBytes: 0,
     evidence: 'exact', attribution: { rootId: 500, rootLabel: 'whitelisted', depth: 1, pluginHint: null }
@@ -251,30 +244,29 @@ test('kill buttons follow harness attribution, not evidence alone (REVIEW-0904 P
   assert.equal(allNodes(pinned, (node) => node.props?.className === 'tk-btn').length, 0,
     'a whitelisted-root descendant exposes no tree-kill button')
 
-  // Match on the row's own pid line: the duplicate finding renders the same
-  // command line as its evidence sample, so the cmdline alone is ambiguous.
+  // 按行自己的 pid 行匹配：重复发现渲染的命令行与它的证据样本相同，只看命令行
+  // 无法区分。
   const host = rows.find((node) => textOf(node).includes('pid 2 ·'))
   assert.ok(host, 'the harness-attributed row is rendered')
   assert.equal(allNodes(host, (node) => node.props?.className === 'tk-btn').length, 1,
     'a harness-attributed row keeps its kill button')
 })
 
-// The host stamps one of three levels on every finding, and the summary states
-// all three counts. A bucket that only ever reads one level would still render
-// a line here, so each count is read on its own and an `indicative` finding is
-// watched against the `exact` count it must not move.
+// 宿主给每条发现盖三个等级之一，摘要同时给出三个计数。只读一个等级的桶也会
+// 渲染出一行，因此每个计数单独验证，并检查 `indicative` 不会推高它不应影响的
+// `exact` 计数。
 test('the summary counts each confidence level separately', () => {
   const data = fixtureData()
   const { surface } = boot(data)
   const panel = panelOf(surface, data)
   const summary = allNodes(panel, (node) => node.props?.className === 'tk-summary')
   assert.equal(summary.length, 1)
-  // 3 exact (two attributed, one an older payload that carries no confidence
-  // field), no indicative, 1 inferred — in the host's own order.
+  // 3 条 exact（两条已归因，一条是带不出 confidence 字段的旧负载）、0 条
+  // indicative、1 条 inferred——按宿主自己的顺序。
   assert.match(textOf(summary[0]), /exact 3 · indicative 0 · inferred 1/)
 
-  // The middle level is the one a degraded sample produces: the host caps its
-  // own level at `indicative` and the finding keeps its attribution chain.
+  // 中间等级是降级采样产生的：宿主把它自己的等级封顶在 `indicative`，发现仍然
+  // 保留归因链。
   const indicative = {
     type: 'duplicate', rule: 'duplicate.cmdline', key: 'mcp-degraded', pids: [2, 3, 4],
     detail: '3 processes share one command line, sampled degraded',
@@ -287,28 +279,26 @@ test('the summary counts each confidence level separately', () => {
   const panelWithBoth = panelOf(boot(data).surface, data)
   const split = allNodes(panelWithBoth, (node) => node.props?.className === 'tk-summary')
   assert.match(textOf(split[0]), /exact 3 · indicative 1 · inferred 1/)
-  assert.equal(countOf(split[0], 'exact'), 3, 'an indicative finding never raises the exact count')
-  assert.equal(countOf(split[0], 'indicative'), 1, 'the middle level is counted on its own')
-  assert.equal(countOf(split[0], 'inferred'), 1, 'the inferred level is unaffected by the middle level')
+  assert.equal(countOf(split[0], 'exact'), 3, '一条 indicative 发现永远不会推高 exact 计数')
+  assert.equal(countOf(split[0], 'indicative'), 1, '中间等级单独计数')
+  assert.equal(countOf(split[0], 'inferred'), 1, 'inferred 计数不受中间等级影响')
 
-  // The two levels are also displayed apart: the middle-level row carries the
-  // `indicative` badge, the same row does not read as `exact`, and it is not
-  // among the rows counted under that badge. Its chain is intact, so it stays
-  // expanded with the rest of the attributed findings.
+  // 两个等级也分开显示：中间等级的行带 `indicative` 徽标，同一行不会被读成
+  // `exact`，也不在那个徽标下的行里。它的链条完整，因此与其余已归因发现一起
+  // 保持展开。
   const rows = allNodes(panelWithBoth, (node) => node.props?.className === 'tk-row')
   const middle = rows.find((node) => textOf(node).includes('sampled degraded'))
-  assert.ok(middle, 'the indicative finding renders its own row')
+  assert.ok(middle, 'indicative 发现渲染自己的行')
   assert.match(textOf(middle), /^indicative duplicate/)
-  assert.ok(!textOf(middle).includes('exact'), 'the middle level never reads as exact')
+  assert.ok(!textOf(middle).includes('exact'), '中间等级永远不会读成 exact')
   const exactRows = rows.filter((node) => textOf(node).startsWith('exact '))
-  assert.equal(exactRows.length, 3, 'the exact rows are the three findings stamped exact, and no other')
-  assert.ok(!exactRows.includes(middle), 'an indicative finding lands in no exact row')
+  assert.equal(exactRows.length, 3, 'exact 行就是盖了 exact 的三条发现，没有别的')
+  assert.ok(!exactRows.includes(middle), 'indicative 发现不会落在任何 exact 行里')
 })
 
 /**
- * The number the summary renders next to one level. The walker concatenates the
- * spans, so the level word can follow a digit (`Findings 4exact 3`) and carry no
- * word boundary of its own.
+ * 摘要在一个等级旁边显示的数字。遍历器把各个 span 拼接起来，等级词可能紧跟数字
+ * （`Findings 4exact 3`），自身没有词边界。
  */
 function countOf(node, level) {
   const match = textOf(node).match(new RegExp('(^|[^a-z])' + level + ' (\\d+)'))
@@ -316,9 +306,8 @@ function countOf(node, level) {
   return Number(match[2])
 }
 
-// The host's summary line reports two scopes, because one number could not be
-// read: the machine has hundreds of unattributed processes and only a few are
-// DSH-adjacent, so the panel states the related head and the bucket it came from.
+// 宿主的摘要行报告两个范围，因为一个数字读不出信息：机器上有数百个未归属进程，
+// 其中只有少数与 DSH 相关，因此面板同时给出相关的开头数量与它出自的整个集合。
 test('the summary names the unattributed scope and its machine-wide total', () => {
   const data = fixtureData()
   data.reconcile = { summary: { jobs: 1, jobsMatched: 1, osOnly: 0, unattributed: 3, unattributedTotal: 386 }, rows: [] }
@@ -328,8 +317,7 @@ test('the summary names the unattributed scope and its machine-wide total', () =
   assert.match(textOf(head[0]), /jobs 1 · matched 1 · os-only 0 · DSH-related unattributed 3 \/ machine-wide unattributed 386/)
 })
 
-// The unattributed list is truncated to twenty rows, so the disclosure has to
-// say what the badge counts and what the order means.
+// 未归属列表被截断到二十行，因此披露区必须说明徽标统计的是什么、排序是什么含义。
 test('the unattributed disclosure states the scope of its badge', () => {
   const data = fixtureData()
   data.unknown = [
@@ -346,9 +334,9 @@ test('the unattributed disclosure states the scope of its badge', () => {
   assert.match(textOf(unknown), /2 unattributed processes machine-wide; ranked by DSH relevance, with the desktop application processes listed apart and the first 20 of the rest shown\./)
 })
 
-// The header has to answer "which tree is this". `$DSH_HOME/treekeeper` and the
-// process table are shared, so a desktop host and a `dsh web` host at the same
-// time render nearly the same panel; the owning pid, port and kind separate them.
+// 标题栏要回答“这是哪一棵树”。`$DSH_HOME/treekeeper` 与进程表是共享的，同一时刻
+// 的桌面宿主与 `dsh web` 宿主会渲染出几乎相同的面板；所属 pid、端口与类型把它们
+// 分开。
 test('the panel header names the owning host by pid, port and kind', () => {
   const web = fixtureData()
   web.port = 3080
@@ -375,10 +363,9 @@ test('the header states an unknown port rather than dropping it', () => {
   assert.match(textOf(head[0]), /this host pid 100 · port \?/)
 })
 
-// A leftover of a host that was killed has real evidence and no chain at all:
-// confidence `indicative`, scope `unattributed`. It collapses into the
-// investigation section, and the badge names the level the host stamped rather
-// than the section it sits in.
+// 被直接结束的宿主留下的残留有真实证据，却完全没有链条：置信等级
+// `indicative`，作用域 `unattributed`。它收进排查区，徽标写的是宿主盖下的等级，
+// 不是它所在的分区。
 test('an indicative previous-host lead is investigated, never offered for kill', () => {
   const data = fixtureData()
   data.findings = data.findings.filter((finding) => finding.rule !== 'orphan.dead-parent')
@@ -402,12 +389,11 @@ test('an indicative previous-host lead is investigated, never offered for kill',
   assert.ok(!textOf(leads).includes('inferred orphan'), 'an indicative lead never reads as inferred')
   assert.equal(allNodes(leads, (node) => node.props?.className === 'tk-btn').length, 0,
     'a previous host survivor is a lead, not a kill candidate')
-  // The tone follows the level rather than the section: a lead that rests on a
-  // process fact wears the warn tone even though it renders collapsed.
+  // 语气跟随等级，而不是所在分区：建立在进程事实上的线索即使收起显示，也用
+  // 警示色。
   const leadRow = allNodes(leads, (node) => node.props?.className === 'tk-row')[0]
   assert.equal(allNodes(leadRow, (node) => node.props?.className === 'tk-badge tk-warn').length, 1)
-  // A level and a section are separate questions: this lead is counted at the
-  // middle level and the level the host stamped is the badge it wears.
+  // 等级与分区是两个问题：这条线索按中间等级计数，徽标写的是宿主盖下的等级。
   const summary = allNodes(panel, (node) => node.props?.className === 'tk-summary')
   assert.match(textOf(summary[0]), /exact 3 · indicative 1 · inferred 0/)
 })
@@ -420,10 +406,9 @@ function containsNode(outer, inner) {
   return false
 }
 
-// The desktop application's Electron set heads the machine-wide bucket because
-// its processes are siblings of the host rather than its descendants. The host
-// marks the rows that belong to it, so the panel shows them as one labelled
-// group inside the bucket, and every member keeps the columns a loose row has.
+// 桌面应用的 Electron 进程组排在整机集合的前面，因为它的进程是宿主的兄弟而不是
+// 后代。宿主给属于它的行打上标记，面板把这些行显示成集合内一个带标签的组，组内
+// 每一行保留普通行的各个列。
 test("the desktop application's own processes render as one labelled group", () => {
   const data = fixtureData()
   const now = Date.now()
@@ -453,8 +438,7 @@ test("the desktop application's own processes render as one labelled group", () 
   const groupSummary = allNodes(group, (node) => node.type === 'summary')[0]
   assert.match(textOf(groupSummary), /^desktop application processes4$/)
 
-  // Every member is a normal row: the cmdline it was matched on, its pid, its
-  // working set and its age are all readable inside the group.
+  // 组内每一行都是普通行：它匹配到的命令行、pid、工作集与存活时长都能读到。
   const rows = allNodes(group, (node) => node.props?.className === 'tk-row')
   assert.equal(rows.length, 4)
   for (const pid of [40376, 26928, 27240, 9480]) {
@@ -469,17 +453,15 @@ test("the desktop application's own processes render as one labelled group", () 
   assert.equal(allNodes(group, (node) => node.props?.className === 'tk-btn').length, 0,
     'a grouped row is unattributed, so it exposes no tree-kill button')
 
-  // The row that belongs to no group stays a loose row of the same bucket.
+  // 不属于任何组的行仍然是同一集合里的普通行。
   const loose = allNodes(bucket, (node) => node.props?.className === 'tk-row')
   assert.equal(loose.length, 5, 'the bucket renders every row exactly once')
   assert.ok(!containsNode(group, loose.find((node) => textOf(node).includes('pid 4 ·'))))
 })
 
-// The host stamps desktop-application membership on each row, so the panel only
-// partitions what it was handed: every row comes back exactly once, in the order
-// it arrived, and a payload that carries no flag at all groups nothing rather
-// than throwing. The bundle runs in its own realm, so the arrays it returns are
-// read as plain pids rather than compared whole.
+// 宿主把桌面应用成员标记盖在每一行上，因此面板只划分拿到的数据：每一行恰好回来
+// 一次，顺序与到达时一致；完全没有这个标记的负载什么也不分组，也不会抛错。包在
+// 自己的 realm 里运行，因此把它返回的数组按 pid 读取，不整体比较。
 test('the panel partitions the bucket on the flag the host stamped', () => {
   const row = (pid, desktopApp) => ({ pid, ppid: 0, name: 'proc', cmdline: '', desktopApp })
   const { splitDesktopApp } = boot(fixtureData()).plugin._tkTest
@@ -490,7 +472,7 @@ test('the panel partitions the bucket on the flag the host stamped', () => {
   assert.deepEqual(pids(rest), [4])
   assert.equal(group.length + rest.length, 3, 'the bucket is partitioned, nothing is dropped')
 
-  // A row without the flag belongs to no group, and the rank order survives.
+  // 没有这个标记的行不属于任何组，排序顺序保持不变。
   const unstamped = splitDesktopApp([{ pid: 9480 }, row(40376, true)])
   assert.deepEqual(pids(unstamped.group), [40376])
   assert.deepEqual(pids(unstamped.rest), [9480])

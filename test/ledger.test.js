@@ -50,9 +50,8 @@ test('job ledger mirror refreshes from onJobsChanged and ignores stale rows afte
   let rows = [{ id: 'bash-1', kind: 'bash', label: 'first', status: 'running' }]
   const jobs = {
     list() { return rows },
-    // The real service binds this subscription to the jobs service's OWN
-    // context, so nothing detaches it when the consumer's fence goes away:
-    // the disposer the helper keeps is the only thing that does.
+    // 真实服务把这个订阅绑在任务服务自己的上下文上，调用方的围栏消失时没有人
+    // 解除它：helper 保存的解除函数是唯一会解除它的东西。
     onJobsChanged(listener) { changed = listener; return () => { detached = true } }
   }
   const agents = { list() { return [] } }

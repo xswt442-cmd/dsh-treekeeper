@@ -5,8 +5,7 @@ import { reconcile } from '../lib/reconcile.js'
 const procs = [
   { pid: 10, ppid: 1, name: 'node', cmdline: 'node worker.js --port 3000', createdMs: 100, wsBytes: 0 },
   { pid: 20, ppid: 1, name: 'node', cmdline: 'node orphan.js', createdMs: 200, wsBytes: 0 },
-  // A stranger that still reads as DSH: the row the panel used to bury under
-  // twenty Windows services.
+  // 一个仍然带有 DSH 路径的陌生进程：整机集合里正是这类行值得排到前面。
   { pid: 30, ppid: 1, name: 'node', cmdline: 'node C:\\Users\\dev\\.dsh\\profiles\\web\\node_modules\\some-mcp\\index.js', createdMs: 300, wsBytes: 0 }
 ]
 
@@ -22,7 +21,7 @@ test('reconciliation labels command-line joins as indicative evidence', () => {
   assert.equal(result.rows.length, 1, 'unattributed processes stay in the separate investigation bucket')
   assert.equal(result.summary.jobsMatched, 1)
   assert.equal(result.summary.osOnly, 0)
-  // Two scopes, two numbers: one stranger is DSH-adjacent, two are not.
+  // 两个范围，两个数字：一个陌生进程与 DSH 相关，两个不相关。
   assert.equal(result.summary.unattributed, 1)
   assert.equal(result.summary.unattributedTotal, 2)
 })
@@ -32,8 +31,7 @@ test('reconciliation keeps unattributed OS processes out of the DSH ledger rows'
 
   assert.equal(result.summary.jobs, 0)
   assert.equal(result.summary.osOnly, 0)
-  // The count in the panel's summary line is the DSH-related head of the
-  // machine-wide bucket, and the bucket total is reported beside it.
+  // 面板摘要行里的数量是整机集合中与 DSH 相关的那一部分，旁边给出集合总数。
   assert.equal(result.summary.unattributed, 1)
   assert.equal(result.summary.unattributedTotal, 3)
 })
