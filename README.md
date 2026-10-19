@@ -113,13 +113,7 @@ Subagent 分区有三种状态：
 
 ## 开发
 
-提交前运行：
-
-```sh
-npm test
-npm run docs:check
-npm pack --dry-run
-```
+首次检出后运行 `npm install`。提交前的完整检查见 [AGENTS.md 的 Verify 一节](./AGENTS.md#verify)。
 
 ## License
 

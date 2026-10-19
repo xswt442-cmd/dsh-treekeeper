@@ -1,3 +1,3 @@
-# Claude Code
+# CLAUDE
 
-Follow @AGENTS.md. For releases, also read @docs/RELEASING.md.
+Read [AGENTS.md](./AGENTS.md).

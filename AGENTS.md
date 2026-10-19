@@ -7,11 +7,13 @@
 - Keep `package.json#version` and `lib/shared.js#VERSION` equal, and keep `README.md` / `README.en.md` and `docs/CHANGELOG.md` / `docs/CHANGELOG.en.md` in sync.
 - The four marked blocks are generated from `dsh-mini-utility-dock`: `dsh-loopback-helpers`, `dsh-host-guard` and `dsh-host-http` in `lib/shared.js`, `dsh-utility-launcher` in `lib/client.js`. Edit the dock fragment and run the matching `*.sync` script (`loopback:sync` / `guard:sync` / `http:sync` / `launcher:sync`); never edit a block. The guard block depends on the loopback block, so keep that order, and the HTTP glue lands below the guard — that is the block order, and `lib/shared.js` keeps exactly one pair of markers per block.
 - `npm test` checks every block against the dock version this repo pins (`launcher:check` / `loopback:check` / `guard:check` / `http:check`). The `shared.js` script names are synonymous by design, not four separate inspections: the CLI selects the blocks from the markers present in the target file that its own version carries, so one `check lib/shared.js` verifies the host-side blocks it knows in a single pass.
-- A `check` only compares the marked blocks its pinned dock version knows, so a block newer than that pin passes silently — never read a green `http:check` as proof that the third block matches. `test/host-http.test.js` is what asserts each block's markers appear exactly once and in order. Raise the pin and re-sync every block in the same commit: two separate pushes leave CI reporting ok about a file it did not actually verify.
+- A `check` only compares the marked blocks its pinned dock version knows, so a block newer than that pin passes silently — never read a green `http:check` as proof that the third block matches. `test/host-http.test.js` is what asserts each block's markers appear exactly once and in order. Raise the pin and re-sync every block in the same commit: a check compares only the blocks its pin knows, so a split leaves CI green over bytes it never verified.
 - The HTTP glue comes from the `dsh-host-http` block in `lib/shared.js`: `sendJson`, `optionalSessionId` and the browser authorizer are defined there, so the `cache-control: no-store` reply policy has one source. This plugin keeps the fragment's default POST vocabulary (`code: 'method'`); a route's unexpected failure answers a fixed `code` only — an exception message never goes into a response body, it is logged instead, because it reaches the browser and can name a host path.
 - `lib/index.js` authorizes a request with one call, `authorizeBrowser(req, res)`. Do not put the Connection branches back inline in the route: the order they decide in — a Connection that throws answers 503 and never reaches the handler, and a reload gap after a Connection has existed never falls back to the loopback guard — is the security property, and it lives in the fragment.
 - `dsh-plugin-parity` (from the dock) is a manual diagnostic, not a CI gate: what it asserts cannot hold across checkouts that sit on different branches.
 - `docs.config.mjs` declares this repository's bilingual documentation pairs — the two paths of each pair and the shape it is compared by — and `docs:check` passes it to `dsh-plugin-docs` with `--config`. The checker names no document of its own, so a pair moves or a new one appears by editing that file alone.
+- Draft PRs with `.github/PULL_REQUEST_TEMPLATE.md`; `.agents/skills/pr/SKILL.md` explains how to fill it from the actual diff and verification results.
+- Release steps live in `docs/RELEASING.md`; GitHub release notes are cut from `docs/CHANGELOG.md` by `scripts/release-notes.mjs`.
 - Treat `lib/act.js`, the process allowlists, and the creation-time guards as safety-critical. Never widen what can be terminated without a test.
 - Keep finding confidence, scope, source, and rule values consistent across the host, the client, and the agent tools.
 - Report unsupported platforms explicitly: do not add an unverified non-Windows sampler.
@@ -36,3 +38,7 @@ npm run docs:check
 for f in lib/*.js; do node --check "$f"; done
 npm pack --dry-run
 ```
+
+## Scope and authorization
+
+- Change only what the task requires. Do not commit, push, change branches, create tags or releases, deploy services, or modify credentials or production data without explicit authorization for the current task.

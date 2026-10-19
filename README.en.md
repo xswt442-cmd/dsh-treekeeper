@@ -113,13 +113,7 @@ A protected descendant that appears after that sample cannot be excluded.
 
 ## Development
 
-Run before committing:
-
-```sh
-npm test
-npm run docs:check
-npm pack --dry-run
-```
+Run `npm install` after the first checkout. The full pre-commit checks are listed under [Verify in AGENTS.md](./AGENTS.md#verify).
 
 ## License
 
