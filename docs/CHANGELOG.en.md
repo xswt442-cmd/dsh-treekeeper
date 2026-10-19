@@ -3,6 +3,30 @@
 Release notes are generated from the matching version section; newest first.
 For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
+## 0.5.0 - 2026-10-19
+
+### Changed
+
+- Long-running processes inside a terminal are no longer treated as residue of the host tree: processes attributed to a terminal session's pty are marked non-terminable.
+
+### Added
+
+- A terminal session's reported pid becomes an exact attribution anchor, and its descendant subtree carries a `pty` root; a job row matching that pid gets an exact join instead of an indicative one.
+- A cross-session subagent census listing the live subagents of every session, not only the currently selected tree.
+- A subagent residency level of `running` / `idle-resident` / `idle-parked`, taken from the turn timing projection. Residency is by design, and only accumulated time past a configurable threshold is promoted to a finding.
+- Resident subagents can be released to return their capacity slot, through a host primitive rather than `taskkill`. Off by default and separate from the termination switch.
+
+### Fixed
+
+- The job ledger reads its owned jobs again: a session's running-job count and a finding's session ownership were both permanently empty.
+
+## 0.4.1 - 2026-10-19
+
+### Maintenance
+
+- The compatibility range includes DSH `0.2.1-rc.2`.
+- The README's "remote reach" row now reads "listening on a non-loopback address": starting with DSH `0.2.1-rc.2`, the webserver rejects wildcard addresses such as `0.0.0.0` and `::`, so the original wording no longer holds.
+
 ## 0.4.0 - 2026-09-30
 
 ### Fixed
@@ -32,13 +56,13 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
 ### Maintenance
 
-- No behaviour changed: only the explanatory text in `lib/` and `test/` was rewritten; assertions, routes and termination gates are untouched.
+- The explanatory text in `lib/` and `test/` matches the current behaviour; assertions, routes and termination gates are unchanged.
 
 ## 0.3.5 - 2026-09-29
 
 ### Maintenance
 
-- Compatibility verification covers `0.2.0-rc.1`: one real boot on Windows and one on Linux.
+- The compatibility range includes DSH `0.2.0-rc.1`.
 
 ## 0.3.4 - 2026-09-29
 

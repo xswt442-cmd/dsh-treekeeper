@@ -1,10 +1,8 @@
-// The panel's failure line. A host exception's text names commands, Windows
-// error strings and paths; it belongs in the console and the host log, and the
-// browser gets the stable code this plugin publishes. Booted the way
-// `client-entry.test.js` boots the bundle — a classic script in a vm with a fake
-// React — and driven both through the `_tkTest` helpers the bundle exposes for
-// tests and through the panel's own buttons, so a failure travels a real call
-// site: fetch -> hostFailure -> failureLine -> setError -> the rendered line.
+// 面板的失败行。宿主异常的原文包含命令、Windows 错误串与路径，属于控制台和宿主
+// 日志；浏览器拿到的是本插件公布的稳定错误码。这里按 `client-entry.test.js` 的
+// 方式启动包——vm 里的经典脚本加上假 React——并通过包提供给测试的 `_tkTest`
+// 辅助函数与面板自己的按钮两条路径驱动，让一次失败真的走完调用链：
+// fetch -> hostFailure -> failureLine -> setError -> 渲染出来的那一行。
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -38,12 +36,12 @@ function bootClient() {
   return { plugin, logged }
 }
 
-// --- panel mounting -------------------------------------------------------
+// 面板挂载
 
 /**
- * Enough React to mount TreeKeeperSurface and read its state back: the panel's
- * hook slots (0 useRef, 1 open tick, 2 data, 3 error, 4 loading, 5 armed, 6
- * focus revision) live in one array a test can seed.
+ * 足够挂载 TreeKeeperSurface 并读回其状态的 React：面板的 hook 槽位（0 useRef、
+ * 1 open tick、2 data、3 error、4 loading、5 armed、6 focus revision）放在一个
+ * 数组里，测试可以直接写入。
  */
 function makeFakeReact() {
   const hookStates = []
@@ -62,7 +60,7 @@ function makeFakeReact() {
       if (!(i in hookStates)) hookStates[i] = { current: initial }
       return hookStates[i]
     },
-    // The test drives `refresh` through the header button instead of an effect.
+    // 测试通过标题栏按钮驱动 `refresh`，不经过 effect。
     useEffect() {},
     _seed(index, value) { hookStates[index] = value },
     _reset() { hookIndex = 0 }
@@ -92,9 +90,9 @@ function textOf(node) {
 }
 
 /**
- * Mount the open panel against one fake `fetch`, and hand back a re-render.
- * The panel opens through `focusSession`, the same call the session header entry
- * makes: rendering the launcher row would spend the surface's hook slots first.
+ * 用一个假的 `fetch` 挂载打开的面板，返回重新渲染的函数。
+ * 面板通过 `focusSession` 打开，与会话标题栏入口是同一次调用：渲染启动器行会先
+ * 消耗掉面板的 hook 槽位。
  */
 function bootPanel(fetchImpl, data = null) {
   const react = makeFakeReact()
@@ -141,7 +139,7 @@ function bootPanel(fetchImpl, data = null) {
   return { plugin, logged, render }
 }
 
-/** The header Refresh button: the panel's own snapshot call site. */
+/** 标题栏的刷新按钮：面板自己的快照调用点。 */
 const refreshButton = (node) => allNodes(node, (n) => n.type === 'button' && n.props?.className === 'tk-headbtn')
 
 const t = {
@@ -165,8 +163,8 @@ test('a refusal is shown as this plugin states it, in the current language', () 
   assert.equal(failureLine(t, hostFailure({ ok: false, code: 'unauthorized' }, 401)), t.reasonAuth)
   assert.equal(failureLine(t, hostFailure({ ok: false, code: 'non_harness_root' }, 409)), t.reasonUnattributed)
   assert.equal(failureLine(t, hostFailure({ ok: false, code: 'bad_json' }, 400)), t.reasonBadBody)
-  // The line that would have carried the host's raw text still records it, in the
-  // console, which is where the README points a reader who needs it.
+  // 本应携带宿主原文的那一行仍然记录它，写在控制台里——README 让需要原文的读者
+  // 去那里找。
   assert.ok(logged.length >= 5, 'every failure logs')
   assert.ok(logged.some((line) => line.includes('snapshot_required')))
 })
@@ -181,8 +179,8 @@ test('an unexpected host failure names its code and nothing else', () => {
   assert.ok(!line.includes('powershell'), 'the panel line is not a place for a command line')
   assert.ok(logged.some((entry) => entry.includes('internal_error')))
 
-  // A code the panel has no line for is stated, not swallowed: the user can quote
-  // it and the log has the rest.
+  // 面板没有对应文案的错误码会被说出来，不会被吞掉：用户可以把它抄下来，其余
+  // 细节在日志里。
   assert.equal(failureLine(t, hostFailure({ ok: false, code: 'brand_new' }, 409)), 'request failed: brand_new')
 })
 
@@ -190,26 +188,25 @@ test('a reply that is not JSON at all still lands as one line', () => {
   const { plugin } = bootClient()
   const { hostFailure, failureLine } = plugin._tkTest
 
-  // An HTML error page from something in front of the host, or an empty 502.
+  // 宿主前面的某个组件返回的 HTML 错误页，或者一个空的 502。
   assert.equal(failureLine(t, hostFailure(null, 502)), 'request failed: unknown_error')
   assert.equal(failureLine(t, hostFailure({}, 500)), 'request failed: unknown_error')
-  // And a transport-level failure has no body and no code either.
+  // 传输层的失败也没有响应体与错误码。
   assert.equal(failureLine(t, new TypeError('Failed to fetch')), 'request failed: unknown_error')
 })
 
-/** The one line the panel renders in its error slot. */
+/** 面板在错误槽位里渲染的那一行。 */
 function errLine(tree) {
   const nodes = allNodes(tree, (n) => n.props?.className === 'tk-err')
   assert.equal(nodes.length, 1, 'the panel renders one error line')
   return textOf(nodes[0])
 }
 
-// One snapshot of host text, used on both fetch call sites: what a route that
-// threw writes into its own 500 body, and what a rejected transport writes into
-// its Error.
+// 一份宿主原文，两个 fetch 调用点都会用到：抛错的路由写进自己 500 响应体的内容，
+// 以及被拒绝的传输写进 Error 的内容。
 const HOST_RAW = 'spawn powershell.exe EACCES: permission denied C:\\Users\\dev\\.dsh\\treekeeper'
 
-/** A finding the panel offers a kill button for: hard, one pid, harness-rooted. */
+/** 面板会提供终止按钮的发现：等级确证、单个 pid、归因根是 harness。 */
 function killableData() {
   const created = 1780000000000
   return {
@@ -233,11 +230,11 @@ function killableData() {
   }
 }
 
-/** Every microtask the two awaited fetch hops need, without a timer. */
+/** 两次 await 的 fetch 往返所需的全部微任务，不依赖定时器。 */
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 
 test('a host exception text never reaches the rendered panel line', async () => {
-  // 1. The snapshot call site, against a host 500 whose body carries the text.
+  // 1. 快照调用点，面对一个响应体带着原文的宿主 500。
   const answered = bootPanel(async () => ({
     ok: false,
     status: 500,
@@ -251,16 +248,16 @@ test('a host exception text never reaches the rendered panel line', async () => 
   assert.ok(!textOf(answeredTree).includes(HOST_RAW), 'the host sentence is not panel text')
   assert.ok(!textOf(answeredTree).includes('powershell'), 'nor is the command it names')
 
-  // 2. The same call site when the transport itself rejects with exception text.
+  // 2. 同一个调用点，传输层直接以异常原文拒绝。
   const rejected = bootPanel(async () => { throw new Error(HOST_RAW) })
   await refreshButton(rejected.render())[0].props.onClick()
   const rejectedTree = rejected.render()
   assert.equal(errLine(rejectedTree), 'request failed: unknown_error')
   assert.ok(!textOf(rejectedTree).includes(HOST_RAW), 'a rejected Error message is not panel text either')
-  // The console keeps what the panel drops, which is where the README points.
+  // 控制台保留面板丢掉的内容，README 让读者去那里找。
   assert.ok(rejected.logged.some((line) => line.includes(HOST_RAW)), 'the raw text is still reachable')
 
-  // 3. The kill call site: the same body shape, a different fetch.
+  // 3. 终止调用点：同样的响应体形状，另一个 fetch。
   const killing = bootPanel(async (url, options) => (options && options.method === 'POST'
     ? { ok: false, status: 500, json: async () => ({ ok: false, code: 'taskkill_failed', error: HOST_RAW }) }
     : { ok: true, status: 200, json: async () => ({ ok: true, ...killableData() }) }), killableData())

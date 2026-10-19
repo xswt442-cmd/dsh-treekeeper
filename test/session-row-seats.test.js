@@ -1,15 +1,12 @@
-// DTK-M3: the two ambient Session-row seats DSH 0.1.7-rc.2 declares on the
-// sidebar (`sidebar.session.row.leading` / `sidebar.session.row.hover`).
+// 侧边栏会话行的两个常驻座位，槽位名为 `sidebar.session.row.leading` 与
+// `sidebar.session.row.hover`。
 //
-// The leading cell mounts on every idle Session row, so the hard constraint is
-// that neither occupant may cause host work: both read only the module-level
-// fact cache the panel fills when it loads a snapshot. This file boots the
-// client bundle through the fake-React renderer and asserts four things — the
-// seats are registered on the right names with this plugin's id, the cache
-// builder attributes only genuinely per-session host facts, the leading
-// occupant is blank without a cached fact and paints the 12px glyph with one,
-// and the hover occupant lines up the cached facts while its action focuses the
-// panel on the row's own sessionId even with an empty cache.
+// 前置单元格在每个空闲会话行上挂载，因此硬约束是两个座位都不能引起宿主工作：
+// 它们只读面板加载快照时填好的模块级事实缓存。本文件通过假 React 渲染器启动
+// 客户端包，断言四件事：座位以本插件的 id 注册在正确的槽位名上；缓存构建只收录
+// 真正归到单个会话的宿主事实；前置座位没有缓存事实时不画，有事实时画 12px 图标；
+// 悬停座位列出缓存事实，它的动作即使缓存为空也能把面板聚焦到该行自己的
+// sessionId。
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -18,7 +15,7 @@ import vm from 'node:vm'
 
 const SOURCE = fs.readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
 
-// --- harness --------------------------------------------------------------
+// 测试支架
 
 function makeElement() {
   return {
@@ -33,10 +30,9 @@ function makeElement() {
   }
 }
 
-// Fake React sufficient for the row occupants and for mounting the panel once.
-// `runEffects` lets the integration test drive the panel's open effect, which is
-// the only place a snapshot is requested; the seat tests leave it off so a
-// render can never start a request.
+// 足以渲染行座位并挂载一次面板的假 React。`runEffects` 让集成测试驱动面板的打开
+// effect，那是唯一会请求快照的地方；座位测试不开启它，因此一次渲染永远不会发起
+// 请求。
 function makeFakeReact({ runEffects = false } = {}) {
   const hookStates = []
   let hookIndex = 0
@@ -69,7 +65,7 @@ function renderNode(el, react) {
   return { type: el.type, props: el.props || {}, children: (el.children || []).map((c) => renderNode(c, react)).filter(Boolean) }
 }
 
-// Mount one registered occupant with props, exactly as the slot owner does.
+// 按槽位宿主的方式带上属性挂载一个已注册的座位。
 function mountOccupant(entry, props, react) {
   return renderNode(react.createElement(entry.render, props), react)
 }
@@ -86,7 +82,7 @@ function textOf(node) {
   return (node.text ?? '') + (node.children || []).map(textOf).join('')
 }
 
-// --- one host snapshot body, shaped like lib/index.js answers -------------
+// 一份宿主快照响应体，形状与 lib/index.js 的答案一致
 
 // GET /dsh-treekeeper/api?action=snapshot&rootSessionId=session-a
 function snapshot() {
@@ -98,15 +94,13 @@ function snapshot() {
     degraded: false,
     subagentRoot: 'session-a',
     subagentAvailability: 'available',
-    // The only rows the host attributes to a specific session: the focused
-    // root's own descendant records.
+    // 宿主唯一归到具体会话的行：被聚焦的根自己的后代记录。
     subagents: [
       { kind: 'subagent', id: 'child-1', depth: 1, mode: 'continuable', label: 'worker', activity: 'running', hasChildren: false },
       { kind: 'subagent', id: 'child-2', depth: 1, mode: 'continuable', label: 'idle worker', activity: 'inactive', hasChildren: false },
       { kind: 'diagnostic', id: 'broken', depth: 1, reason: 'cycle' }
     ],
-    // Session attribution here comes from the ledger join, not from the host
-    // process list.
+    // 这里的会话归属来自账本对账，不来自宿主进程列表。
     findings: [
       { type: 'duplicate', pids: [7], ownership: { scope: 'session', session: 'session-a', job: 'job-1' } },
       { type: 'orphan', pids: [8], ownership: { scope: 'unattributed', session: null, job: null } }
@@ -119,10 +113,35 @@ function snapshot() {
         { source: 'os-attributed', id: 'pid:7', label: 'node', ownerSession: null, status: 'running', pids: [7], indicative: false }
       ]
     },
-    // No session field exists on a host process row: this list is never cached.
+    // 宿主进程行上没有会话字段：这个列表永远不会被缓存。
     processes: [{ pid: 7, cmdline: 'node server.js', evidence: 'exact', attribution: { rootLabel: 'harness' } }],
     unknown: [],
     attributedCount: 1
+  }
+}
+
+/** 跨会话普查的响应形状：按父分组，父由宿主谱系给出。 */
+function census() {
+  return {
+    ok: true,
+    availability: 'available',
+    releaseEnabled: false,
+    parents: [
+      { parentId: 'session-a', children: [{ id: 'child-1', status: 'idle', depth: 1 }] },
+      { parentId: 'session-b', children: [{ id: 'child-9', status: 'idle', depth: 1 }] }
+    ],
+    residency: {
+      // 驻留 N / 空闲 M；没有容量上限——那个配置读不到。
+      summary: { resident: 2, running: 0, idle: 1, unknown: 1 },
+      thresholdMs: 0,
+      findings: [],
+      rows: [
+        // 一个早已空闲却仍驻留的子代理：DSH 的 activity 会把它显示成 running。
+        { id: 'child-1', parentId: 'session-a', residency: 'idle-resident', confidence: 'exact', busyMs: 7_200_000, settledMs: 7_200_000, lastTurnCompleted: true },
+        // 缺 sessionQuery 的一行不带判定。
+        { id: 'child-9', parentId: 'session-b', residency: 'unknown', confidence: 'indicative', busyMs: null, settledMs: null, lastTurnCompleted: null }
+      ]
+    }
   }
 }
 
@@ -131,6 +150,7 @@ function boot({ runEffects = false } = {}) {
   const registered = []
   const injected = []
   const fetches = []
+  const posted = []
   const context = {
     AbortController,
     navigator: { language: 'en-US' },
@@ -146,8 +166,16 @@ function boot({ runEffects = false } = {}) {
     },
     window: { addEventListener() {}, removeEventListener() {}, __ModuleLoader__: { load() {} } },
     fetch: async (url, options) => {
-      fetches.push({ url, options })
-      return { ok: true, status: 200, json: async () => snapshot() }
+      // POST 的请求体解析出来，让断言能读它真的发了什么，而不只是发过什么。
+      if (options && options.method === 'POST') {
+        posted.push({ url: String(url), body: JSON.parse(String(options.body)) })
+      } else {
+        fetches.push({ url, options })
+      }
+      // 普查是独立 action，回答的形状与快照不同；夹具按 url 分派，两条请求各自
+      // 得到宿主会给出的那份负载。
+      const body = String(url).includes('action=census') ? census() : snapshot()
+      return { ok: true, status: 200, json: async () => body }
     }
   }
   let definition = null
@@ -166,7 +194,7 @@ function boot({ runEffects = false } = {}) {
     inject(services, mount) { mount({ slots, on() {} }) },
     on() {}
   })
-  return { plugin, react, registered, injected, fetches }
+  return { plugin, react, registered, injected, fetches, posted }
 }
 
 function seat(registered, name) {
@@ -175,7 +203,7 @@ function seat(registered, name) {
   return entry
 }
 
-// --- (a) the two seats are registered on the right names ------------------
+// （一）两个座位注册在正确的槽位名上
 
 test('both Session-row seats are registered with this plugin id and a free order', () => {
   const { registered, injected } = boot()
@@ -183,35 +211,33 @@ test('both Session-row seats are registered with this plugin id and a free order
     const entry = seat(registered, name)
     assert.equal(entry.options.name, name)
     assert.equal(entry.options.id, 'treekeeper')
-    // The shipped ui-schedule occupants sit at order 10 on both seats.
+    // 已发布的日程座位在两个槽位上都占 order 10。
     assert.equal(entry.options.order, 20)
     assert.equal(typeof entry.options.label, 'function')
     assert.equal(entry.options.label(), 'TreeKeeper')
     assert.equal(typeof entry.render, 'function')
     assert.ok(injected.includes(name))
   }
-  // The pre-existing contributions are untouched.
+  // 已有的贡献保持不变。
   assert.deepEqual(registered.map((entry) => entry.options.id),
     ['treekeeper', 'utility-launcher', 'treekeeper-panel', 'treekeeper-open', 'treekeeper', 'treekeeper'])
 })
 
-// --- the cache only holds what the host attributes to one session ---------
+// 缓存只保留宿主归到某一个会话的事实
 
 test('the fact cache keeps only host facts attributed to a specific session', () => {
   const { plugin } = boot()
   const facts = plugin._tkTest.sessionFactsFrom(snapshot())
 
-  // session-a is named by the subagent root, by its ledger-owned job and by one
-  // finding's ledger join; the unattributed finding, the ownerless job, the
-  // OS-attributed row and every host process row are not attributable and are
-  // therefore absent.
+  // session-a 被 subagent 根、它名下的账本任务以及一条发现的账本链接点名；
+  // 未归属的发现、无主任务、OS 归因行与每一条宿主进程行都归不到会话，因此不在
+  // 缓存里。
   assert.deepEqual([...facts.keys()], ['session-a'])
-  // The map lives in the bundle's realm, so compare a copy of the fact.
+  // 这张表位于包自己的 realm 里，因此比较它的一份副本。
   assert.deepEqual({ ...facts.get('session-a') }, { descendants: 2, running: 1, diagnostics: 1, jobs: 1, findings: 1 })
   assert.equal(plugin._tkTest.sessionFactIds().length, 0, 'building facts must not touch the store')
 
-  // Before a session is focused the host answers with no root and no
-  // session-owned ledger rows, so nothing at all is cached.
+  // 聚焦会话之前，宿主回答没有根，也没有归到会话的账本行，因此什么都不缓存。
   const anonymous = snapshot()
   anonymous.subagentRoot = null
   anonymous.subagents = []
@@ -220,7 +246,7 @@ test('the fact cache keeps only host facts attributed to a specific session', ()
   assert.equal(plugin._tkTest.sessionFactsFrom(anonymous).size, 0)
 })
 
-// --- (b) the leading occupant ---------------------------------------------
+// （二）前置座位
 
 test('the leading seat renders nothing without a cached fact and the glyph with one', () => {
   const { plugin, react, registered } = boot()
@@ -242,18 +268,18 @@ test('the leading seat renders nothing without a cached fact and the glyph with 
   assert.equal(glyph[0].props.height, 12)
   assert.equal(glyph[0].props.stroke, 'currentColor')
 
-  // A row the cache does not mention, and a missing sessionId, stay blank.
+  // 缓存里没有提到的行，以及缺失的 sessionId，都保持空白。
   assert.equal(mountOccupant(leading, { sessionId: 'session-b' }, react), null)
   assert.equal(mountOccupant(leading, {}, react), null)
 })
 
-// --- (c) the hover occupant and its focus action --------------------------
+// （三）悬停座位与它的聚焦动作
 
 test('the hover seat shows the cached facts and focuses the panel on its row session', () => {
   const { plugin, react, registered, fetches } = boot()
   const hover = seat(registered, 'sidebar.session.row.hover')
 
-  // Empty cache: no fact line, but the discovery action is present and works.
+  // 空缓存：没有事实行，但发现动作仍然存在且可用。
   const blank = mountOccupant(hover, { sessionId: 'session-a' }, react)
   assert.equal(blank.type, 'div')
   assert.equal(blank.props.className, 'tk-row-hover')
@@ -276,25 +302,88 @@ test('the hover seat shows the cached facts and focuses the panel on its row ses
   action.props.onClick()
   assert.equal(plugin._tkTest.getFocusSessionId(), 'session-a')
 
-  // Nothing either seat did reached the host.
+  // 两个座位都没有向宿主发起任何请求。
   assert.deepEqual(fetches, [])
 })
 
-// --- the panel load is what fills the cache, and nothing per row does ------
+// 面板加载是填充缓存的唯一来源，逐行座位不发起请求
 
 test('the panel load fills the cache the row seats read, with one request for the focused root', async () => {
   const { plugin, react, registered, fetches } = boot({ runEffects: true })
-  // Focus first, the way the session-header entry does, then mount the panel.
+  // 先按标题栏入口的方式聚焦，再挂载面板。
   plugin._tkTest.focusSession('session-a')
   const panel = registered.find((entry) => entry.options.id === 'treekeeper-panel')
   renderNode(panel.render(), react)
   await new Promise((resolve) => setTimeout(resolve, 0))
 
-  assert.deepEqual(fetches.map((call) => call.url), ['/dsh-treekeeper/api?action=snapshot&rootSessionId=session-a'])
+  // 面板自己发两条：聚焦根的快照与跨会话普查。普查不带根——它覆盖全部会话。
+  assert.deepEqual(fetches.map((call) => call.url), [
+    '/dsh-treekeeper/api?action=snapshot&rootSessionId=session-a',
+    '/dsh-treekeeper/api?action=census'
+  ])
   assert.deepEqual([...plugin._tkTest.sessionFactIds()], ['session-a'])
 
   const leading = seat(registered, 'sidebar.session.row.leading')
   assert.ok(mountOccupant(leading, { sessionId: 'session-a' }, react))
   assert.equal(mountOccupant(leading, { sessionId: 'session-b' }, react), null)
-  assert.equal(fetches.length, 1, 'the seats must not add a request per row')
+  assert.equal(fetches.length, 2, 'the seats must not add a request per row')
+})
+
+test('the census section reports residency levels instead of the store-membership flag', async () => {
+  const { plugin, react, registered } = boot({ runEffects: true })
+  plugin._tkTest.focusSession('session-a')
+  const panel = registered.find((entry) => entry.options.id === 'treekeeper-panel')
+  renderNode(panel.render(), react)
+  await new Promise((resolve) => setTimeout(resolve, 0))
+
+  // 普查是面板自己发起的异步请求，因此断言渲染的是它到达之后的那一棵树。
+  const censusSection = allNodes(renderNode(panel.render(), react), (node) => node.props?.key === 'tk-census')
+  assert.equal(censusSection.length, 1, 'the census is its own section')
+  const rendered = censusSection[0]
+  const text = textOf(rendered)
+
+  // 驻留 N / 空闲 M 来自宿主观测；容量上限读不到，因此不出现在这里。
+  assert.match(text, /resident 2/)
+  assert.match(text, /resident, idle 1/)
+  assert.ok(!/8/.test(text), 'no capacity figure is claimed')
+
+  // 驻留级取代 activity：一个早已空闲却仍驻留的子代理显示为「驻留空闲」，而
+  // 它的 catalog activity 在快照响应里是 running。
+  assert.match(text, /resident, idle/)
+  assert.match(text, /no verdict/)
+  // 措辞是驻留 / 空闲，不是泄漏。
+  assert.ok(!/leak/i.test(text))
+
+  // 释放默认关闭：开关未选中，且没有释放按钮。
+  const checkbox = allNodes(rendered, (node) => node.type === 'input' && node.props?.type === 'checkbox')
+  assert.equal(checkbox.length, 1)
+  assert.equal(checkbox[0].props.checked, false)
+  assert.equal(allNodes(rendered, (node) => String(node.props?.className || '').includes('tk-btn-release')).length, 0)
+
+  // 阈值输入按分钟给出，默认关闭。
+  assert.match(text, /promotion threshold: off/)
+  const minutes = allNodes(rendered, (node) => node.type === 'input' && node.props?.type === 'number')
+  assert.equal(minutes.length, 1)
+})
+
+test('enabling release from the panel posts its own switch and refreshes', async () => {
+  const { plugin, react, registered, fetches, posted } = boot({ runEffects: true })
+  plugin._tkTest.focusSession('session-a')
+  const panel = registered.find((entry) => entry.options.id === 'treekeeper-panel')
+  renderNode(panel.render(), react)
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  fetches.length = 0
+
+  const censusSection = allNodes(renderNode(panel.render(), react), (node) => node.props?.key === 'tk-census')
+  const rendered = censusSection[0]
+  const checkbox = allNodes(rendered, (node) => node.type === 'input' && node.props?.type === 'checkbox')[0]
+
+  await checkbox.props.onChange({ target: { checked: true } })
+  assert.equal(posted.length, 1)
+  assert.equal(posted[0].url, '/dsh-treekeeper/api?action=config')
+  assert.deepEqual(posted[0].body, { allowRelease: true })
+  assert.equal(fetches.some((call) => call.url === '/dsh-treekeeper/api?action=census'), true, 'the census reloads')
+
+  // 释放的请求体只有 childId：父由宿主谱系反查。
+  assert.ok(!posted.some((call) => JSON.stringify(call.body || {}).includes('parentId')))
 })

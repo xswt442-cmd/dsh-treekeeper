@@ -1,12 +1,9 @@
-// DTK-M2: the deterministic session entry. A session-scope header action hands
-// the panel a sessionId the slot contract guarantees; that id resolves the root
-// ahead of `sessions.list.getSnapshot().current`, which can be empty. The three
-// states (available / root-required / unavailable) are expressed inside the
-// root-scoped panel.
+// 确定性的会话入口。会话作用域的标题栏操作把槽位契约保证存在的 sessionId 交给
+// 面板；这个 id 优先于可能为空的 `sessions.list.getSnapshot().current` 决定根。
+// 三种状态（available / root-required / unavailable）在根作用域的面板里表达。
 //
-// This file boots the client bundle twice: once against the plugin's pure
-// decision helpers (exposed as _tkTest) and once through the fake-React
-// renderer to assert the panel's three-state UI.
+// 本文件启动两次客户端包：一次只针对插件暴露为 _tkTest 的纯判定函数，一次通过
+// 假 React 渲染器断言面板的三态界面。
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -17,7 +14,7 @@ import { subagentAvailability } from '../lib/shared.js'
 const SOURCE = fs.readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8')
 const MCP = 'cmd /c npx -y @upstash/context7-mcp'
 
-// --- shared helpers -------------------------------------------------------
+// 共用辅助函数
 
 function makeElement() {
   return {
@@ -45,9 +42,8 @@ function boot(bundle, context) {
   return definition
 }
 
-// Fake React sufficient to render the Panel tree: hook slots are reset per
-// component invocation, which is exact for this bundle because only
-// TreeKeeperSurface uses hooks.
+// 足以渲染 Panel 树的假 React：hook 槽位在每次组件调用时重置，对这个包是准确的，
+// 因为只有 TreeKeeperSurface 使用 hook。
 function makeFakeReact() {
   const hookStates = []
   let hookIndex = 0
@@ -67,8 +63,8 @@ function makeFakeReact() {
     },
     useEffect() { /* effects are out of scope: no fetch, no listeners */ },
     _resetHooks() { hookIndex = 0 },
-    // TreeKeeperSurface hook slots: 0 useRef, 1 useOpen tick, 2 data,
-    // 3 error, 4 loading, 5 armed, 6 focus revision.
+    // TreeKeeperSurface 的 hook 槽位：0 useRef、1 useOpen tick、2 data、
+    // 3 error、4 loading、5 armed、6 focus revision。
     _seed(index, value) { hookStates[index] = value }
   }
   return react
@@ -100,7 +96,7 @@ function findButton(node) {
   return allNodes(node, (n) => n.type === 'button' && n.props?.className === 'tk-session-entry')
 }
 
-// --- host: three-state helper ---------------------------------------------
+// 宿主：三态辅助函数
 
 test('host derives the three subagent states from the same ordering as the panel', () => {
   assert.equal(subagentAvailability('root-1', [{ id: 'child' }]), 'available')
@@ -110,7 +106,7 @@ test('host derives the three subagent states from the same ordering as the panel
   assert.equal(subagentAvailability(undefined, []), 'root-required')
 })
 
-// --- client: pure decision helpers ----------------------------------------
+// 客户端：纯判定函数
 
 test('the client exposes the three-state decision and root resolution for the panel', async () => {
   const fetched = []
@@ -141,7 +137,7 @@ test('the client exposes the three-state decision and root resolution for the pa
   assert.equal(helpers.subagentState(null, null), 'root-required')
   assert.equal(helpers.subagentState({ subagentAvailability: 'available' }, 'root-1'), 'available')
 
-  // The slot value wins over the guessed selection; absence resolves to null.
+  // 槽位值优先于猜测的当前选中项；两者都没有时得到 null。
   assert.equal(helpers.resolveRootSessionId('focused-session', 'guessed-session'), 'focused-session')
   assert.equal(helpers.resolveRootSessionId(null, 'guessed-session'), 'guessed-session')
   assert.equal(helpers.resolveRootSessionId(null, null), null)
@@ -150,7 +146,7 @@ test('the client exposes the three-state decision and root resolution for the pa
   assert.equal(helpers.snapshotQuery('session-xyz'), '?action=snapshot&rootSessionId=session-xyz')
   assert.equal(helpers.snapshotQuery(null), '?action=snapshot')
 
-  // The one request path really sends the resolved root to the host API.
+  // 唯一的请求路径确实把解析出的根发给宿主接口。
   helpers.focusSession('session-xyz')
   const resolved = helpers.resolveRootSessionId(helpers.getFocusSessionId(), 'guessed-session')
   await helpers.fetchSnapshot(resolved)
@@ -158,7 +154,7 @@ test('the client exposes the three-state decision and root resolution for the pa
   assert.equal(fetched[0], '/dsh-treekeeper/api?action=snapshot&rootSessionId=session-xyz')
 })
 
-// --- client: slot value flows to the host API through the header action ---
+// 客户端：槽位值经标题栏操作流向宿主接口
 
 test('the session header action hands the slot sessionId to the panel and the host API', async () => {
   const fetched = []
@@ -202,20 +198,20 @@ test('the session header action hands the slot sessionId to the panel and the ho
   assert.equal(headerEntry.options.id, 'treekeeper-open')
   assert.equal(headerEntry.options.order, 30)
 
-  // Slot contract: the framework always passes a definite sessionId.
+  // 槽位契约：框架总会传入一个确定的 sessionId。
   const entryElement = renderNode(headerEntry.render({ sessionId: 'session-abc' }), react)
   const button = findButton(entryElement)
   assert.equal(button.length, 1)
   button[0].props.onClick()
 
-  // The slot value is now the panel's deterministic root.
+  // 槽位值现在是面板确定性的根。
   assert.equal(plugin._tkTest.getFocusSessionId(), 'session-abc')
   const resolved = plugin._tkTest.resolveRootSessionId(plugin._tkTest.getFocusSessionId(), null)
   await plugin._tkTest.fetchSnapshot(resolved)
   assert.deepEqual(fetched, ['/dsh-treekeeper/api?action=snapshot&rootSessionId=session-abc'])
 })
 
-// --- client: the root-scoped panel expresses all three states --------------
+// 客户端：根作用域面板表达全部三种状态
 
 function panelBoot(data, focusSessionId) {
   const react = makeFakeReact()
@@ -253,9 +249,8 @@ function panelBoot(data, focusSessionId) {
     on() {}
   })
 
-  // Focus the panel the way the header entry does: the entry itself opens the
-  // panel, so only the no-focus case needs the launcher. Clicking the launcher
-  // while the panel is already open would close it, which is the real toggle.
+  // 按标题栏入口的方式聚焦面板：入口本身会打开面板，因此只有“没有聚焦”的情形
+  // 需要经过启动器。面板已打开时再点启动器会把它关掉，这就是真实开关行为。
   if (focusSessionId) {
     plugin._tkTest.focusSession(focusSessionId)
   } else {

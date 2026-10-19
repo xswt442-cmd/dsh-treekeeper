@@ -17,15 +17,14 @@ function responseCapture() {
 }
 
 /**
- * Minimal POST request for the routes that read a JSON body. `readBody` reads
- * `pid`/`seenCreatedMs` from the body, not the query string, so a caller that
- * wants to reach the kill gates has to send one.
+ * 读取 JSON 请求体的路由所需的最小 POST 请求。`readBody` 从请求体而不是查询串里
+ * 读 `pid`/`seenCreatedMs`，因此想走到终止检查的调用方必须发送请求体。
  */
 function postWith(body, url) {
   return postRaw(JSON.stringify(body), url)
 }
 
-/** The same request with the body as the wire sent it, so malformed JSON can be. */
+/** 同一个请求，但请求体保持发送时的原文，用来构造格式错误的 JSON。 */
 function postRaw(text, url) {
   return {
     url,
@@ -40,15 +39,14 @@ function postRaw(text, url) {
   }
 }
 
-/** Boot one profile and hand back its route plus the disposer the plugin registered. */
+/** 启动一份配置，返回路由与插件注册的清理函数。 */
 function bootRoute(services = {}) {
   let route = null
   let disposeCleanup = null
   apply({
     webServer: { port: 3080, register(value) { route = value; return () => {} } },
-    // Only the mount that needs the boot layer's home accessor supplies `get`;
-    // without one the plugin falls back to resolveDshHome(), which is the path
-    // every other test in this file exercises.
+    // 只有需要启动层主目录访问器的挂载才提供 `get`；没有它时插件回退到
+    // resolveDshHome()，本文件其他测试走的都是这条路径。
     ...(services.get ? { get: services.get } : {}),
     inject(names, mount) {
       if (names.includes('connection') && services.connection) {
@@ -61,11 +59,10 @@ function bootRoute(services = {}) {
 }
 
 /**
- * Point $DSH_HOME at a scratch home for one test and hand back the undo.
- * The undo deletes rather than assigning when the variable was unset:
- * `process.env.DSH_HOME = undefined` writes the string 'undefined', which
- * resolveDshHome reads as a home the harness accepts, and every later boot in
- * this file would then write its history under that name.
+ * 为一个测试把 $DSH_HOME 指向临时主目录，并返回撤销函数。
+ * 变量原本未设置时撤销必须删除而不是赋值：`process.env.DSH_HOME = undefined`
+ * 会写入字符串 'undefined'，resolveDshHome 把它当成宿主接受的主目录，本文件之后
+ * 每次启动都会把历史写到那个名字下。
  */
 function useDshHome(home) {
   const previous = process.env.DSH_HOME
@@ -104,7 +101,7 @@ test('host registers the guarded TreeKeeper API and releases it on disposal', as
         return [{ kind: 'child', id: 'child-1', parentId: rootSessionId, depth: 1, mode: 'continuable', label: 'worker', activity: 'running', hasChildren: false }]
       }
     },
-    // the host half registers its teardown via ctx.effect(() => cleanup)
+    // 宿主侧通过 ctx.effect(() => cleanup) 注册清理函数
     effect(fn) {
       disposeCleanup = fn()
     }
@@ -210,12 +207,10 @@ test('request close aborts the descendant traversal signal', async () => {
   assert.equal(res.writes.length, 0, 'an aborted response must not write an error body')
 })
 
-// The plugin's own guard is the ONLY gate on a host that mounts no Connection
-// service, and that is a real composition: the webserver and Connection ship in
-// the same bundle today, so this fallback is what a reduced or hand-built host
-// gets. Its off-loopback-peer branch is therefore asserted here at the route,
-// where the mounted wiring decides it — a unit test on the guard alone cannot
-// show that the route still reaches it.
+// 在没有挂载 Connection 服务的宿主上，插件自己的守卫是唯一的关卡，而这是一种
+// 真实组合：webserver 与 Connection 目前出自同一个包，精简或手工搭建的宿主拿到
+// 的就是这条后备路径。因此它的“非回环对端”分支在路由层断言，由实际挂载的接线
+// 决定——只测守卫本身无法说明路由仍然会走到它。
 test('with no Connection mounted, the route refuses an off-loopback peer itself', async () => {
   let route = null
   apply({
@@ -226,8 +221,8 @@ test('with no Connection mounted, the route refuses an off-loopback peer itself'
     effect(fn) { fn() }
   })
 
-  // A real loopback socket cannot stage this peer, so the route is driven
-  // directly with a socket address no local client can have.
+  // 真实的回环套接字造不出这种对端，因此直接用本地客户端不可能持有的套接字地址
+  // 驱动路由。
   for (const query of ['action=jobs', 'action=snapshot']) {
     const res = responseCapture()
     await route.handler({
@@ -239,7 +234,7 @@ test('with no Connection mounted, the route refuses an off-loopback peer itself'
 
     assert.equal(res.writes[0].status, 403, query + ' must not answer a remote peer')
     assert.equal(res.writes[1].body.code, 'non_loopback_peer')
-    // The rejection must not carry the data it refused to serve.
+    // 拒绝的响应不能带上它拒绝提供的数据。
     for (const field of ['jobs', 'ledgerAvailability', 'processes', 'findings', 'attributedCount']) {
       assert.ok(!(field in res.writes[1].body), 'the rejection leaks ' + field)
     }
@@ -253,7 +248,7 @@ test('the kill route refuses before any OS call when the request or the snapshot
     effect(fn) { fn() }
   })
 
-  // The method gate answers before the body is read: a GET can never terminate.
+  // 方法检查在读取请求体之前回答：GET 永远不能终止进程。
   const getRes = responseCapture()
   await route.handler({
     url: '/dsh-treekeeper/api?action=kill&pid=1',
@@ -262,19 +257,15 @@ test('the kill route refuses before any OS call when the request or the snapshot
     socket: { remoteAddress: '127.0.0.1' }
   }, getRes)
   assert.equal(getRes.writes[0].status, 405)
-  // The published POST refusal is the embedded fragment's default shape,
-  // unchanged by moving the gate into the block: code `method`, the action named
-  // once.
+  // 公布的 POST 拒绝是内嵌片段的默认形状：错误码 `method`，action 只出现一次。
   assert.deepEqual(getRes.writes[1].body, {
     ok: false,
     code: 'method',
     error: 'action "kill" requires POST'
   })
 
-  // No snapshot has been taken in this profile, so the entry gate refuses and
-  // taskkill is never reached. The pid is one no live process can hold, so a
-  // gate that silently stopped working would fail this assertion instead of
-  // terminating the test runner.
+  // 这份配置还没有取过快照，因此入口检查拒绝，taskkill 不会被调用。pid 没有任何
+  // 存活进程会持有，所以一道悄悄失效的检查会让这个断言失败，而不会终止测试运行器。
   const postRes = responseCapture()
   await route.handler(postWith({ pid: 999999, seenCreatedMs: 1 }, '/dsh-treekeeper/api?action=kill'), postRes)
   assert.equal(postRes.writes[0].status, 409)
@@ -288,9 +279,8 @@ test('the kill route refuses before any OS call when the request or the snapshot
 test('a malformed body is a 400, not a stale-snapshot refusal', async () => {
   const { route } = bootRoute()
 
-  // The regression this closes: a truncated kill body parsed to `{}`, the gates
-  // saw "no matching pid" and answered 409 snapshot_required - telling the
-  // caller to refresh a snapshot for a request that never named a pid.
+  // 被截断的终止请求体会解析成 `{}`，各道检查看到“没有匹配的 pid”后回答 409
+  // snapshot_required，让调用方为一个从未指定 pid 的请求刷新快照。
   for (const text of ['{"pid":', 'not json', 'null', '[{"pid":1}]']) {
     const res = responseCapture()
     await route.handler(postRaw(text, '/dsh-treekeeper/api?action=kill'), res)
@@ -302,14 +292,14 @@ test('a malformed body is a 400, not a stale-snapshot refusal', async () => {
     }, text)
   }
 
-  // Same rule for the other mutating action, so no route reads fields out of a
-  // body that failed to parse.
+  // 另一个会改变状态的 action 遵循同一条规则，因此没有路由会从解析失败的请求体
+  // 里读字段。
   const configRes = responseCapture()
   await route.handler(postRaw('{"pollMs":', '/dsh-treekeeper/api?action=config'), configRes)
   assert.equal(configRes.writes[0].status, 400)
   assert.equal(configRes.writes[1].body.code, 'bad_json')
 
-  // The size contract keeps answering 413, ahead of the parse.
+  // 大小限制仍然在解析之前回答 413。
   const bigRes = responseCapture()
   await route.handler(postRaw('{"pad":"' + 'x'.repeat(70000), '/dsh-treekeeper/api?action=kill'), bigRes)
   assert.equal(bigRes.writes[0].status, 413)
@@ -336,8 +326,8 @@ test('a kill body must name a pid and a creation time', async () => {
     assert.equal(res.writes[1].body.code, code, JSON.stringify(body))
   }
 
-  // A well-formed integer still reaches the gates, which is what the 409 case
-  // above proves; the validators must not become an new open door either.
+  // 格式正确的整数仍然会走到各道检查，上面的 409 用例已经证明了这一点；这些
+  // 校验器也不能变成新的后门。
   const ok = responseCapture()
   await route.handler(postWith({ pid: 999999, seenCreatedMs: 1 }, '/dsh-treekeeper/api?action=kill'), ok)
   assert.equal(ok.writes[0].status, 409)
@@ -364,7 +354,7 @@ test('config narrows pollMs to off or a bounded interval', async () => {
       assert.match(res.writes[1].body.error, /2000 and 600000/)
     }
 
-    // Off and in-range still work, and the answer states what was set.
+    // 关闭与范围内的值都可用，回答里说明设置成了什么。
     const off = responseCapture()
     await route.handler(postWith({ pollMs: 0 }, '/dsh-treekeeper/api?action=config'), off)
     assert.equal(off.writes[0].status, 200)
@@ -375,8 +365,8 @@ test('config narrows pollMs to off or a bounded interval', async () => {
     assert.equal(on.writes[0].status, 200)
     assert.equal(on.writes[1].body.config.pollMs, 5000)
 
-    // Whitelist pids are read with the same rule: junk entries are dropped
-    // rather than becoming 0 (a pid every snapshot can contain nothing of).
+    // 登记的 pid 用同一套规则读取：无效条目被丢掉，不会变成 0（快照里不可能有
+    // pid 0）。
     const pins = responseCapture()
     await route.handler(postWith({ extraWhitelistPids: [400, '500', 'abc', 1.5, 0, null] }, '/dsh-treekeeper/api?action=config'), pins)
     assert.deepEqual(pins.writes[1].body.config.extraWhitelistPids, [400, 500])
@@ -389,8 +379,7 @@ test('a host failure answers a fixed code and keeps its message in the log', asy
   const logged = []
   t.mock.method(console, 'error', (...args) => { logged.push(args.join(' ')) })
   const hostFailure = 'Get-CimInstance : 拒绝访问 C:\\Users\\dev\\.dsh\\profiles\\web\\node_modules'
-  // The sampler is the seam: a real one would spawn PowerShell, and the route
-  // outcome under test is the failure handling, not the sampling.
+  // 采样器是接缝：真实采样器会启动 PowerShell，这里要验证的是失败处理，不是采样。
   const { route } = bootRoute({ deps: { sample: () => { throw new Error(hostFailure) } } })
 
   const res = await get(route, '?action=snapshot')
@@ -430,9 +419,8 @@ test('the sampler platform verdict keeps its own code', async (t) => {
 
 test('subtree answers from the sample it was given and hides nothing about the host', async (t) => {
   t.mock.method(console, 'error', () => {})
-  // ppid 0 on the root: a parent that is simply absent would be an orphan
-  // finding, and a finding makes the snapshot route append to the history file —
-  // this test has no business writing into whoever's harness home it runs in.
+  // 根的 ppid 为 0：单纯缺失的父进程会变成一条孤儿发现，而有发现时快照路由会
+  // 往历史文件追加内容——这个测试不该写进运行它的宿主主目录。
   const procs = [
     { pid: 100, ppid: 0, name: 'node', cmdline: 'node host', createdMs: 1, wsBytes: 0 },
     { pid: 101, ppid: 100, name: 'git', cmdline: 'git status', createdMs: 1, wsBytes: 0 }
@@ -440,12 +428,11 @@ test('subtree answers from the sample it was given and hides nothing about the h
   const { route } = bootRoute({ deps: { sample: async () => ({ procs, degraded: null }) } })
   const res = await get(route, '?action=subtree&pid=100')
   assert.equal(res.writes[0].status, 200)
-  // The root first, then its descendants — the shape the panel renders as the
-  // tree it is about to kill, and the same one the protected-descendant gate
-  // scans.
+  // 先根、再后代——面板把这份顺序渲染成即将终止的树，受保护后代检查扫描的也是
+  // 这棵树。
   assert.deepEqual(res.writes[1].body.subtree.map((p) => p.pid), [100, 101])
 
-  // A sampler that says "not here" is the same verdict the snapshot route gives.
+  // 采样器报告“此平台不支持”时，答案与快照路由一致。
   const unsupported = bootRoute({
     deps: {
       sample: () => {
@@ -459,9 +446,8 @@ test('subtree answers from the sample it was given and hides nothing about the h
   assert.equal(refused.writes[1].body.code, 'unsupported_platform')
 })
 
-// The kill route is where `snapshot.degraded` is spent: the gates trust the
-// producer, so the route's own use of a fresh sample has to be asserted with one
-// that is degraded, and with one that passes.
+// 终止路由是消费 `snapshot.degraded` 的地方：各道检查相信生产者，因此路由自己对
+// 新采样的使用要分别用降级采样和正常采样断言。
 test('a degraded fresh sample refuses the pull even when the entry gate passed', async (t) => {
   t.mock.method(console, 'error', () => {})
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'treekeeper-routes-'))
@@ -476,14 +462,14 @@ test('a degraded fresh sample refuses the pull even when the entry gate passed',
   let call = 0
   const { route, dispose } = bootRoute({
     deps: {
-      // takeSnapshot() samples first, then the kill route re-samples before the pull.
+      // takeSnapshot() 先采样，终止路由在执行前再采一次。
       sample: async () => (call++ === 0 ? healthy : degraded),
       killTree: async (opts) => { kills.push(opts); return { ok: true, code: 'killed' } }
     }
   })
   try {
-    // Prime the snapshot the entry gate reads, so what follows really is refused
-    // by the pre-pull re-sample and not by a missing snapshot.
+    // 先准备入口检查读取的快照，这样后面的拒绝确实来自执行前的重采样，而不是
+    // 缺少快照。
     await get(route, '?action=snapshot')
     const res = responseCapture()
     await route.handler(postWith({ pid: 4234, seenCreatedMs: 1000 }, '/dsh-treekeeper/api?action=kill'), res)
@@ -521,7 +507,7 @@ test('a kill that runs forwards the fresh tree, and its OS text stays out of the
   })
 
   try {
-    // Prime the snapshot the entry gate reads with the same healthy tree.
+    // 用同一棵健康的树准备入口检查读取的快照。
     await get(route, '?action=snapshot')
     const res = responseCapture()
     await route.handler(postWith({ pid: 4234, seenCreatedMs: 1000 }, '/dsh-treekeeper/api?action=kill'), res)
@@ -537,19 +523,19 @@ test('a kill that runs forwards the fresh tree, and its OS text stays out of the
     assert.ok(!JSON.stringify(res.writes[1].body).includes('Access is denied'),
       'taskkill stderr is log material, not panel material')
 
-    // The audit record keeps what the response dropped.
+    // 审计记录保留响应里被丢掉的内容。
     const rows = await new HistoryStore(home).last(10)
     const kill = rows.find((row) => row.kind === 'kill')
     assert.equal(kill.code, 'taskkill_failed')
     assert.equal(kill.detail, rawStderr)
     assert.equal(kill.pid, 4234)
-    // One history file is shared by every host on the machine, so each record
-    // has to say which host wrote it; the file name itself cannot change.
+    // 一台机器只有一个历史文件，因此每条记录都要说明是哪个宿主写的；文件名
+    // 本身不能改。
     assert.equal(kill.hostPid, process.pid)
     assert.equal(kill.port, 3080)
 
-    // A refusal whose detail is a name the plugin chose is still shown: it is the
-    // answer to "why was this one refused", not a leak.
+    // detail 是本插件自己选定的名称时仍然会显示：它回答的是“这一条为什么被拒”，
+    // 不是泄漏。
     const protectedKill = bootRoute({
       deps: {
         sample: async () => fresh,
@@ -572,8 +558,7 @@ test('a findings record names the host that wrote it', async (t) => {
   t.after(() => fs.rmSync(home, { recursive: true, force: true }))
   const restoreHome = useDshHome(home)
 
-  // A root whose recorded parent is absent from the sample: one orphan finding,
-  // which is what makes the snapshot route append to the audit trail.
+  // 根的记录父进程不在采样里：产生一条孤儿发现，快照路由因此往审计记录追加内容。
   const procs = [{ pid: process.pid, ppid: 77777, name: 'node', cmdline: 'node host', createdMs: 1, wsBytes: 0 }]
   const { route, dispose } = bootRoute({ deps: { sample: async () => ({ procs, degraded: null }) } })
 
@@ -593,12 +578,10 @@ test('a findings record names the host that wrote it', async (t) => {
   }
 })
 
-// The audit trail is one file per machine precisely so that the desktop host
-// and a `dsh web` host land in the SAME feed. A process whose own idea of the
-// home disagrees with the host's therefore reads an empty history and writes
-// one nobody else opens, so the home the host names has to win over $DSH_HOME.
-// Both homes are real directories here, which is what lets the assertion say
-// WHICH one received the record.
+// 审计文件每台机器一份，桌面宿主与 `dsh web` 宿主因此写进同一个流。进程自己
+// 推导的主目录若与宿主给出的不同，它会读到空历史，写下的记录也没有别人会打开，
+// 所以宿主给出的主目录必须优先于 $DSH_HOME。这里两个主目录都是真实目录，断言
+// 才能指出记录落在哪一个。
 test('the host accessor, not $DSH_HOME, decides where the audit trail is written', async (t) => {
   const envHome = fs.mkdtempSync(path.join(os.tmpdir(), 'treekeeper-env-home-'))
   const hostHome = fs.mkdtempSync(path.join(os.tmpdir(), 'treekeeper-host-home-'))
@@ -608,8 +591,7 @@ test('the host accessor, not $DSH_HOME, decides where the audit trail is written
   })
   const restoreHome = useDshHome(envHome)
 
-  // A root whose recorded parent is absent from the sample: one orphan finding,
-  // which is what makes the snapshot route append to the audit trail.
+  // 根的记录父进程不在采样里：产生一条孤儿发现，快照路由因此往审计记录追加内容。
   const procs = [{ pid: process.pid, ppid: 77777, name: 'node', cmdline: 'node host', createdMs: 1, wsBytes: 0 }]
   const { route, dispose } = bootRoute({
     get: (name) => (name === 'dshHomePath' ? () => hostHome : undefined),
@@ -632,9 +614,8 @@ test('the host accessor, not $DSH_HOME, decides where the audit trail is written
 
 test('the snapshot names the host kind and stamps each unattributed row with its signals', async (t) => {
   t.mock.method(console, 'error', () => {})
-  // The desktop application's Electron set: the main process carries the image
-  // name, its children reach it by ppid. All four are unattributed because they
-  // are the host's siblings rather than its descendants.
+  // 桌面应用的 Electron 进程组：主进程带映像名，子进程通过 ppid 走到它。四个
+  // 进程都未归属，因为它们是宿主的兄弟而不是后代。
   const desktopMain = { pid: 40376, ppid: 13784, name: 'DeepSeek Harness', cmdline: '"E:\\DSH\\DeepSeek Harness.exe"', createdMs: 1, wsBytes: 0 }
   const procs = [
     { pid: process.pid, ppid: 0, name: 'node', cmdline: 'dsh host', createdMs: 1, wsBytes: 0 },
@@ -650,15 +631,13 @@ test('the snapshot names the host kind and stamps each unattributed row with its
   assert.equal(res.writes[0].status, 200)
   const body = res.writes[1].body
 
-  // The kind is read from the running process's own facts, so a test host under
-  // node.exe reports `web` even though the desktop app exports
-  // ELECTRON_RUN_AS_NODE to every child it starts.
+  // 类型从运行中进程自己的事实读取，因此 node.exe 下的测试宿主报告 `web`，
+  // 尽管桌面应用会给它启动的每个子进程导出 ELECTRON_RUN_AS_NODE。
   assert.equal(body.hostKind, HOST_KIND_WEB)
 
-  // The bucket keeps every row, ranked by DSH relevance then pid ascending. The
-  // application's own processes share one image name, so all three are marked as
-  // its members; the row whose parent chain leaves the bucket is not, and the
-  // bucket holds all four either way.
+  // 集合保留每一行，先按 DSH 相关度、再按 pid 升序排列。应用自己的进程共用
+  // 一个映像名，因此三行都被标为它的成员；父链走出集合的那一行不是，集合仍然
+  // 保留全部四行。
   assert.deepEqual(body.unknown.map((row) => row.pid), [9480, 26928, 40376, 35004])
   assert.deepEqual(body.unknown.map((row) => row.desktopApp), [true, true, true, false])
   assert.equal('signals' in body.unknown[0], false, 'the signal ids stay in the host')
@@ -667,8 +646,8 @@ test('the snapshot names the host kind and stamps each unattributed row with its
 })
 
 test('a browser authorizer states its verdict once per case', async () => {
-  // requestRejection throwing is a Connection that cannot answer, not one that
-  // permits: 503, and the route handler is never entered.
+  // requestRejection 抛错说明这个 Connection 无法作答，不属于允许：回答 503，
+  // 路由处理函数完全不会进入。
   const thrown = bootRoute({ connection: { requestRejection: () => { throw new Error('disposed') } } })
   const thrownRes = await get(thrown.route, '?action=jobs')
   assert.equal(thrownRes.writes[0].status, 503)
@@ -676,7 +655,7 @@ test('a browser authorizer states its verdict once per case', async () => {
   assert.equal(thrownRes.writes.length, 2, 'a refusal must not fall through to the handler')
   thrown.dispose()
 
-  // Any rejection code other than 401 reads as forbidden.
+  // 401 之外的拒绝码都读作 forbidden。
   const forbidden = bootRoute({ connection: { requestRejection: () => 403 } })
   const forbiddenRes = await get(forbidden.route, '?action=jobs')
   assert.equal(forbiddenRes.writes[0].status, 403)
@@ -699,8 +678,8 @@ test('a reload gap answers 503 and does not fall back to the weaker guard fence'
   assert.equal(typeof disposeFn, 'function', 'the authorizer must subscribe to disposal')
   disposeFn()
 
-  // The guard would have let this request through: a loopback peer with a
-  // loopback Host. Getting 503 instead proves the guard was never consulted.
+  // 守卫本来会放行这个请求：回环对端加回环 Host。拿到 503 正好证明守卫从未被
+  // 询问。
   const res = await get(route, '?action=jobs', {
     headers: { host: '127.0.0.1:3080', 'sec-fetch-site': 'same-origin' }
   })
@@ -723,15 +702,15 @@ test('with no Connection ever mounted, this plugin guard is the boundary', async
   assert.equal(crossSite.writes[1].body.code, 'cross_site')
 })
 
-// `action` is the one request-supplied value this plugin writes into a host log
-// line, so it is the one that can forge a row the plugin never wrote.
+// `action` 是本插件写进宿主日志的唯一一个由请求提供的值，因此也是唯一能伪造一行
+// 并非本插件所写日志的值。
 test('a request-supplied action cannot forge a second host log line', async (t) => {
   const logged = []
   t.mock.method(console, 'error', (...args) => logged.push(args.join(' ')))
   const { route, dispose } = bootRoute()
 
-  // A response whose headers are already out: the reply this request earns cannot
-  // be written, so the failure path runs — and logs with the caller's text in it.
+  // 响应头已经写出：这次请求应得的回复写不出去，因此走失败路径，并且日志里带着
+  // 调用方的原文。
   const send = async (query) => {
     const res = responseCapture()
     res.writeHead = () => { throw new Error('Cannot write headers after they are sent') }
@@ -749,8 +728,8 @@ test('a request-supplied action cannot forge a second host log line', async (t) 
     assert.ok(!/[\r\n]/.test(logged[0]), 'the action cannot start a second row')
     assert.match(logged[0], /injected: a forged second line/, 'the text stays readable on the one row')
 
-    // Bounded as well: the action vocabulary here is nine characters, so a
-    // caller that sends four hundred of them is not worth four hundred log bytes.
+    // 同样有长度上限：这里的 action 名称最长九个字符，传入四百个字符的调用方
+    // 不值得换来四百字节日志。
     await send(`?action=${'a'.repeat(400)}`)
     assert.equal(logged.length, 2, 'the second failure is its own row')
     assert.ok(!/a{100}/.test(logged[1]), 'the echoed action is cut, not copied')

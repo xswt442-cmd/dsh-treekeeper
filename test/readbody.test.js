@@ -38,9 +38,9 @@ test('readBody still parses a normal JSON body', async () => {
   assert.deepEqual(await pending, { pollMs: 2000 })
 })
 
-// A malformed body is its own outcome, not "no body". `readBody` reports it so
-// the route answers 400 `bad_json`, and a truncated kill request is read as a
-// bad body rather than one that carried no pid at all.
+// 格式错误的请求体是独立的一种结果，不等于“没有请求体”。readBody 报告它，路由
+// 因此回答 400 `bad_json`；被截断的终止请求会读成坏请求体，而不是一个没有携带
+// pid 的请求。
 test('readBody separates a malformed body from no body', async () => {
   const malformed = [
     '{"pid":',

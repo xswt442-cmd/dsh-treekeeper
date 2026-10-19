@@ -50,9 +50,9 @@ test('pluginHint reads package names out of node_modules paths', () => {
 test('subtreeOf walks the whole tree, cycle-safe', () => {
   const rows = subtreeOf(procs, 100).map((p) => p.pid)
   assert.deepEqual(rows, [100, 200, 300, 301])
-  // A cycle must not hang: point 301 back at 100. buildIndexes keeps the
-  // last row per pid, so 301 now hangs off BOTH 300 and 100; the visited set
-  // must collapse that into one visit of each node in the tree.
+  // 环不能把遍历卡住：把 301 指回 100。buildIndexes 对同一个 pid 保留最后一行，
+  // 301 于是同时挂在 300 与 100 下面；已访问集合必须把它收敛为树里每个节点只
+  // 访问一次。
   const cyclic = procs.concat([{ pid: 301, ppid: 100, name: 'node', cmdline: 'x', createdMs: 9, wsBytes: 0 }])
   assert.deepEqual(subtreeOf(cyclic, 100).map((p) => p.pid).sort((a, b) => a - b), [100, 200, 300, 301])
 })

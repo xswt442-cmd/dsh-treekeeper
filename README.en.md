@@ -18,6 +18,10 @@ A Windows-focused DSH process-tree reconciliation and governance plugin. It puts
 - Sample the current DSH host process tree; other children of the launcher are never attributed to it.
 - Attribute each process to the job that created it, and detect duplicate command lines, orphaned processes and long-running plugin children.
 - Reconcile the job ledger with the root session's subagent descendant tree; the descendant tree of any other session is never read.
+- A terminal session's reported pid is used as an exact attribution anchor, so processes started inside a terminal land under a `pty` root and are marked non-terminable.
+- A cross-session census listing the live subagents of every session, not only the currently selected tree.
+- A subagent residency level — `running` / `idle-resident` / `idle-parked` — taken from the turn timing projection rather than from store membership.
+- Release a resident subagent and return its capacity slot. An in-process `spawn` / `fork` subagent is one Agent inside the same process with no killable OS process behind it, so release goes through a host primitive rather than `taskkill`. Off by default.
 - Guarded tree termination (`taskkill /T /F`); the conditions are listed in the termination-guard table under "Safety and limits".
 - Identify the plugin a process belongs to from the `node_modules` path in its command line, and keep finding and termination history.
 - The DSH host descendants section is collapsed by default, with its count on the heading.
@@ -74,7 +78,50 @@ Configuration is process-local and resets on restart.
 | --- | ---: | --- | --- |
 | `pollMs` | `0` | `0` (sample on request) or 2000–600000 ms | Background sampling interval |
 | `allowKill` | `true` | Boolean | Enables guarded process-tree termination |
+| `allowRelease` | `false` | Boolean | Enables resident-subagent release, separate from `allowKill` |
+| `residencyThresholdMs` | `0` | `0` (off) or 60000–86400000 ms | Accumulated subagent turn time past which a row is promoted to a finding |
 | `extraWhitelistPids` | `[]` | Array of PIDs | Additional protected PIDs |
+
+## Subagent residency
+
+The residency level on the panel is an observable fact, not an alert:
+
+| Residency | Meaning |
+| --- | --- |
+| `running` | The projection holds a turn that has not closed |
+| `idle-resident` | The turn has settled and the Agent is still alive. It holds a capacity slot and can still be continued with `send_message` |
+| `idle-parked` | The child session is no longer in the store, so its capacity slot has been returned |
+| no verdict | The host exposes no `sessionQuery`, or the projection cannot be read |
+
+**Residency is not a leak.** Residency is by design — an idle subagent can still be continued — so it is not reported as a finding by default. Only accumulated turn time past `residencyThresholdMs` is promoted, and that threshold is off by default: how long counts as too long is your call.
+
+The threshold rests on what the projection can answer: `subagentTiming`'s `settledMs` is the accumulated duration of completed turns, and the current turn's duration comes from `now - active.since`. The projection does not record when the last turn ended, so how long a subagent has been idle cannot be derived, and the verdict does not rest on idle duration.
+
+The panel reports "resident N / idle M" and no capacity figure: `ctx.subagents.maxActiveSubagents` is a Volatile, private setting and cannot be read.
+
+Only children live in the agents lineage get a projection read; the diagnostic rows of `listDescendants` have no child session to read and are skipped.
+
+## Releasing a resident subagent
+
+Release and tree termination are two different operations:
+
+- **Release** returns the capacity slot a resident subagent holds (8 by default, one pool per top-level session). It goes through the host's public `drainChildren` primitive. The subagent can no longer be continued with `send_message` afterwards.
+- **Stopping the current turn** ends only that turn and keeps the residency: the subagent still holds its capacity slot and can still be continued. This plugin does not perform it.
+
+A resident subagent may have no OS process behind it at all — an in-process `spawn` / `fork` subagent is one Agent inside the host process. Release therefore never carries a `taskkill` along: a tree kill takes the target's own descendant tree with it, which has nothing to do with releasing.
+
+Release guards:
+
+| Guard | Rule |
+| --- | --- |
+| Switch | `allowRelease` is off by default and separate from `allowKill`; enabling termination does not enable release |
+| Confirmation | The first click arms for 6 seconds, the second click opens the confirmation dialog |
+| Parent | The parent must be the exact live Agent in the registry |
+| Direct child | The target must be a direct child of that parent, checked against the agents lineage |
+| Parent source | The parent is resolved from the server-side lineage; a `parentId` in the request body takes no part in the decision |
+| Read surface | Only `session.header`'s `parentSession` / `origin` and `Agent.status` are read; no session content and no log |
+
+The plugin reports no capacity figure: `ctx.subagents.maxActiveSubagents` is a Volatile, private setting and cannot be read.
 
 ## Safety and limits
 
@@ -87,9 +134,9 @@ Configuration is process-local and resets on restart.
 | Admission when the host has a Connection | Decided by the Connection's Host/Origin fence plus the signed cookie |
 | Admission when the host has no Connection | Decided by this plugin's guard: TCP peer address, Fetch Metadata, Origin, and loopback Host |
 | Mutating actions | POST-only |
-| Remote reach | On a host configured with `trustedHosts` and listening on `0.0.0.0`, a remote peer holding a valid browser session reaches the API, `kill` included |
+| Remote reach | On a host configured with `trustedHosts` and listening on a non-loopback address, a remote peer holding a valid browser session reaches the API, `kill` included |
 | Admission narrowing | This plugin does not narrow the host's Connection admission, and the kill guards below apply there as well |
-| Traversal cancellation | Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal |
+| Traversal cancellation | Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal and the cross-session census |
 
 Kill guards:
 
@@ -101,6 +148,7 @@ Kill guards:
 | Identity check | The PID creation time is compared with the snapshot on entry |
 | Recheck before the kill | A fresh sample is taken and the creation time is compared again |
 | Attribution | Only processes whose attribution root is the DSH host may be terminated, and unattributed processes are investigation-only |
+| Terminal ownership | Processes attributed to a terminal session's pty, and their whole descendant subtree, are not terminable |
 | Never terminable | Critical system processes, the current host, its launcher chain, and `extraWhitelistPids` |
 | Whitelist | An extra whitelisted PID is an attribution root for investigation, and its descendants are visible but not terminable |
 | Protected descendants | If the tree sampled immediately before the kill contains any protected PID, the whole operation is refused |
@@ -111,15 +159,21 @@ A protected descendant that appears after that sample cannot be excluded.
 - Command-line matches are investigative and never trigger automatic action.
 - Findings and termination results are written to `$DSH_HOME/treekeeper/history.jsonl`.
 
+## Terminal session attribution
+
+There is no stable pid mapping between the job ledger and the OS, so reconciliation approximates the command line against the job label and reports `indicative`.
+
+A terminal session is the one exception: the snapshots from `ctx.terminals.list(owner)` carry a `pid`, and that is the single place DSH is willing to hand a pid to a plugin. Those pids join the same multi-root attribution as new roots, so a terminal session's **whole descendant subtree** lands under `rootLabel: 'pty'` — the processes started inside a terminal are all below the pty, and labelling the pty row alone would not be enough.
+
+A job row matching that pid is no longer `indicative`: it is marked `via: 'pty-pid'`, because a label match is two command-line texts containing each other while this is a pid the host itself reported.
+
+**Processes attributed to a `pty` root are not terminable.** A dev server, watcher or `npm install` running in a terminal is legitimately owned by a live PTY, and ending it as if it were residue of the host tree means ending what the user is working with. The whole terminal-owned subtree is owned by that pty, so the pty root and every row below it carry the refusal code `pty_owned`.
+
+On a host that does not expose terminal sessions, that whole path is absent: there is no `pty` attribution root, `FINDING_VIA` carries no `pty-pid`, and reconciliation keeps its previous shape.
+
 ## Development
 
-Run before committing:
-
-```sh
-npm test
-npm run docs:check
-npm pack --dry-run
-```
+Run `npm install` after the first checkout. The full pre-commit checks are listed under [Verify in AGENTS.md](./AGENTS.md#verify).
 
 ## License
 

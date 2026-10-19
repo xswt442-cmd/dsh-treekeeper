@@ -7,12 +7,10 @@ import { parseCimDate } from '../lib/shared.js'
 const liveNode = { alive: true, createdMs: 1000, name: 'node.exe' }
 
 /**
- * The OS seams of `killTree`: `exec` records every command, argv and exec option
- * instead of spawning one, `platform` stands on either side of the Windows gate,
- * and `sleep` means a test does not wait 700 ms for a recheck of a process that
- * never existed. Together they let the suite assert the two properties that
- * matter most: a refused kill never reaches taskkill, and an allowed kill passes
- * exactly the argv the guards were written for.
+ * `killTree` 的操作系统接缝：`exec` 记录每条命令、argv 与执行选项而不真的启动
+ * 进程，`platform` 站到 Windows 门的两侧，`sleep` 让测试不必为一个从未存在的
+ * 进程等 700 毫秒。三者合起来让测试可以断言两个要点：被拒绝的终止不会碰到
+ * taskkill；被允许的终止收到的 argv 正是各道检查所针对的那一个。
  */
 function fakeOs({ platform = 'win32', probes = [], taskkill = { err: null, stdout: '', stderr: '' } } = {}) {
   const calls = []
@@ -39,36 +37,34 @@ const brokenProbe = () => ({ err: Object.assign(new Error('spawn powershell.exe 
 
 
 test('kill outcome treats an unreadable creation time as a survivor, not a reuse', () => {
-  // pidFacts falls back to createdMs:null when the CIM JSON does not parse. The
-  // pid is alive and we cannot prove it is a different process, so the kill must
-  // not be reported as successful.
+  // CIM 的 JSON 解析失败时 pidFacts 把 createdMs 回退为 null。pid 仍然存活，又
+  // 无法证明它换了进程，因此这次终止不能报告成功。
   assert.deepEqual(classifyKillOutcome(100, { alive: true, createdMs: null }), {
     ok: false,
     code: 'still_alive',
     detail: 'process survived taskkill /T /F'
   })
-  // Alive with the creation time we verified: still the same process.
+  // 存活且创建时间与验证过的一致：还是同一个进程。
   assert.equal(classifyKillOutcome(100, { alive: true, createdMs: 100 }).ok, false)
-  // Gone.
+  // 已消失。
   assert.deepEqual(classifyKillOutcome(100, { alive: false, createdMs: null }), { ok: true, code: 'killed' })
-  // Alive at the same pid but provably a different process: the pid was reused
-  // before the probe, which is what a successful tree kill looks like.
+  // pid 相同但可以证明是另一个进程：原进程已经结束，pid 在探测前被复用，这是
+  // 一次成功的树杀。
   assert.deepEqual(classifyKillOutcome(100, { alive: true, createdMs: 999 }), { ok: true, code: 'gone_reused' })
 })
 
 test('a failed probe must refuse, never read as already-gone or killed', () => {
-  // pidFacts reports query failures as { alive:false, error } — the same shape
-  // as a clean "not found" except for the error field. The policy gate must
-  // tell them apart: a transient PowerShell failure on a live target may not
-  // read as a successful no-op.
+  // pidFacts 把查询失败报告为 { alive:false, error }，与干净的“查无此进程”只差
+  // error 字段。策略检查必须区分两者：仍在运行的目标碰上偶发的 PowerShell 故障，
+  // 不能被当成成功的空操作。
   const facts = { alive: false, createdMs: null, name: null, error: 'spawn blocked' }
   assert.equal(
     validateKillTarget({ pid: 200, seenCreatedMs: 100, facts, whitelistPids: new Set() }).code,
     'verify_failed'
   )
 
-  // Same for the post-kill probe: taskkill has already run, so a failed
-  // recheck must read as failure, never as `killed`.
+  // 终止后的探测同理：taskkill 已经执行过，复查失败必须读作失败，不能读作
+  // `killed`。
   assert.deepEqual(
     classifyKillOutcome(100, { alive: false, createdMs: null, error: 'spawn blocked' }),
     { ok: false, code: 'verify_failed', detail: 'spawn blocked' }
@@ -81,12 +77,10 @@ test('kill entry refuses anything the snapshot cannot vouch for', () => {
   const attribution = { 200: { rootLabel: 'harness' } }
   const base = { pid: 200, seenCreatedMs: 100, snapshot, takenAt: 1000, now: 1100, maxAgeMs: 15000, attribution }
 
-  // The only path that may proceed: fresh snapshot, matching creation time, and
-  // a pid the host tree owns.
+  // 唯一可以继续的路径：快照新鲜、创建时间一致，且 pid 归宿主树所有。
   assert.deepEqual(decideKillEntry(base), { ok: true })
 
-  // Every way to be refused. None of them may reach taskkill, and all of them
-  // are covered here rather than only on Windows.
+  // 每一种拒绝方式。它们都不能到达 taskkill，并且都在这里覆盖，不只依赖 Windows。
   const refused = (over, code) => {
     assert.equal(decideKillEntry({ ...base, ...over }).code, code)
   }
@@ -96,8 +90,7 @@ test('kill entry refuses anything the snapshot cannot vouch for', () => {
   refused({ pid: 999 }, 'snapshot_required')
   refused({ seenCreatedMs: Number.NaN }, 'snapshot_required')
   refused({ seenCreatedMs: 999 }, 'snapshot_required')
-  // Present in the snapshot but outside the host tree (the `unknown` bucket),
-  // or owned by something that is not the harness.
+  // 出现在快照里但不属于宿主树（`unknown` 集合），或者归属于 harness 之外的根。
   refused({ attribution: {} }, 'unattributed')
   refused({ attribution: { 200: { rootLabel: 'unknown' } } }, 'non_harness_root')
 })
@@ -141,14 +134,48 @@ test('kill ownership rejects a process outside the DSH host tree', () => {
   const attribution = { 1000: { rootLabel: 'harness', depth: 1 } }
   assert.deepEqual(validateKillOwnership(attribution, 9999), { ok: false, code: 'unattributed' })
   assert.deepEqual(validateKillOwnership(attribution, 1000), { ok: true, code: 'attributed' })
-  // A missing attribution object must never let a kill through.
+  // 缺少归因对象时，任何终止都不能通过。
   assert.deepEqual(validateKillOwnership(null, 1000), { ok: false, code: 'unattributed' })
 })
 
+test('kill ownership rejects a terminal session subtree, root and descendants alike', () => {
+  // 终端里跑着的 dev server 与 watcher 正被一个活着的 PTY 合法拥有。把它们当成
+  // 宿主树的残留去结束，等于结束用户正在用的东西。归因表因此把 pty 根和它下面
+  // 的每一行都排除在可终止范围之外——只排除 pty 自己那一行是不够的。
+  //
+  // 这条断言钉死这个结论：将来放宽归因判据（`rootLabel !== 'harness'` 这一句）
+  // 的人若不读这里，会静默地给终端归属的进程开闸。
+  const procs = [
+    { pid: 1, ppid: 0, name: 'node', cmdline: 'dsh host', createdMs: 1, wsBytes: 0 },
+    { pid: 900, ppid: 1, name: 'pwsh', cmdline: 'pwsh -NoLogo', createdMs: 1, wsBytes: 0 },
+    { pid: 901, ppid: 900, name: 'node', cmdline: 'node C:\\app\\dev.js', createdMs: 1, wsBytes: 0 },
+    { pid: 902, ppid: 901, name: 'node', cmdline: 'node C:\\app\\watcher.js', createdMs: 1, wsBytes: 0 }
+  ]
+  const attribution = Object.fromEntries(
+    attribute(procs, new Map([[1, 'harness'], [900, 'pty']])).attributed
+  )
+
+  for (const pid of [900, 901, 902]) {
+    const verdict = validateKillOwnership(attribution, pid)
+    assert.equal(verdict.ok, false, `pid ${pid} must not be terminable`)
+    // 单独的拒绝码，不并进 non_harness_root：这是「有人合法拥有它」，与「它不
+    // 属于本宿主」是两回事。
+    assert.equal(verdict.code, 'pty_owned', `pid ${pid}`)
+  }
+  // 宿主树本身不受影响，因此这条拒绝不是把归因表整个关掉。
+  assert.deepEqual(validateKillOwnership(attribution, 1), { ok: true, code: 'attributed' })
+
+  // 入口检查同样停住，因此 taskkill 之前就已经结束。
+  assert.deepEqual(decideKillEntry({
+    pid: 901, seenCreatedMs: 1,
+    snapshot: { procs, degraded: false }, takenAt: 1000, now: 1100, maxAgeMs: 15000,
+    attribution
+  }), { ok: false, code: 'pty_owned' })
+})
+
 test('kill ownership rejects descendants of a whitelisted root (REVIEW-0904 P1)', () => {
-  // `extraWhitelistPids` registers pinned pids as attribution roots so the
-  // panel can label them. Authorizing those buckets would invert the setting:
-  // protecting a pid would widen the kill scope instead of narrowing it.
+  // `extraWhitelistPids` 把登记的 pid 作为归因根，好让面板给它们打标签。授权
+  // 这些桶等于把设置反过来用：保护一个 pid 会扩大可终止范围。
   const procs = [
     { pid: 1, ppid: 0, name: 'dsh', cmdline: 'dsh host', createdMs: 1, wsBytes: 0 },
     { pid: 500, ppid: 1, name: 'pinned', cmdline: 'pinned root', createdMs: 1, wsBytes: 0 },
@@ -158,12 +185,12 @@ test('kill ownership rejects descendants of a whitelisted root (REVIEW-0904 P1)'
     attribute(procs, new Map([[1, 'harness'], [500, 'whitelisted']])).attributed
   )
 
-  // The pinned root's child is "attributed", but not to the harness.
+  // 登记根的子进程已经“已归因”，但归的不是 harness。
   assert.equal(validateKillOwnership(attribution, 501).ok, false)
   assert.equal(validateKillOwnership(attribution, 501).code, 'non_harness_root')
-  // The pinned pid itself stays refused too.
+  // 登记的 pid 本身同样被拒绝。
   assert.equal(validateKillOwnership(attribution, 500).code, 'non_harness_root')
-  // Harness descendants keep working.
+  // harness 的后代照常可用。
   assert.deepEqual(validateKillOwnership(attribution, 1), { ok: true, code: 'attributed' })
 })
 
@@ -172,9 +199,9 @@ test('killTree refuses when a protected pid is a descendant (Problem 3)', async 
     { pid: 200, ppid: 1, name: 'node', cmdline: 'node parent', createdMs: 100, wsBytes: 0 },
     { pid: 201, ppid: 200, name: 'node', cmdline: 'node child', createdMs: 100, wsBytes: 0 }
   ]
-  // pid 200 is verified and killable, but its tree contains the protected
-  // pid 201; /T would take 201 down, so the whole kill is refused before any
-  // OS call. This is a pure snapshot check, so it runs off Windows too.
+  // pid 200 已通过验证、本身可终止，但它的树里有受保护的 pid 201；/T 会连带
+  // 结束 201，因此整次终止在启动任何进程之前被拒绝。这是纯快照检查，在 Windows
+  // 之外也会执行。
   const os = fakeOs()
   const result = await killTree({
     pid: 200,
@@ -187,12 +214,11 @@ test('killTree refuses when a protected pid is a descendant (Problem 3)', async 
   assert.equal(result.ok, false)
   assert.equal(result.code, 'protected_descendant')
   assert.equal(result.detail, '201')
-  assert.deepEqual(os.calls, [], 'the tree gate runs before a single process is spawned')
+  assert.deepEqual(os.calls, [], '受保护后代检查在任何进程启动之前完成')
 })
 
 test('a non-Windows host reports unsupported_platform and spawns nothing', async () => {
-  // The non-Windows branch: the gates pass, the OS says no, and `taskkill`
-  // must still never be attempted.
+  // 非 Windows 分支：各道检查都通过，操作系统说不支持，taskkill 仍然不能被执行。
   const target = { pid: 200, ppid: 1, name: 'node', cmdline: 'node', createdMs: CREATED_MS, wsBytes: 0 }
   for (const platform of ['linux', 'darwin']) {
     const os = fakeOs({ platform, probes: [aliveProbe(), aliveProbe()] })
@@ -208,8 +234,8 @@ test('a non-Windows host reports unsupported_platform and spawns nothing', async
     assert.deepEqual(os.calls, [], platform + ' must not reach for powershell or taskkill')
   }
 
-  // Same facts on Windows do reach the OS, so the negative above is the platform
-  // gate and not a broken fixture.
+  // 同样的事实放在 Windows 上会走到系统调用，因此上面的否定结果来自平台检查，
+  // 不是夹具坏了。
   const onWindows = fakeOs({ probes: [aliveProbe(), goneProbe()] })
   const allowed = await killTree({
     pid: 200, seenCreatedMs: CREATED_MS, whitelistPids: new Set([1]),
@@ -232,15 +258,14 @@ test('an allowed kill runs exactly taskkill /PID <pid> /T /F, once', async () =>
   assert.deepEqual(kill.args, TASKKILL_ARGS(200))
   assert.deepEqual(kill.args, ['/PID', '200', '/T', '/F'])
   assert.equal(kill.options.windowsHide, true, 'no console window for a guarded kill')
-  // The recheck waits for the OS to reap the tree; the wait is the seam's, so the
-  // suite sees it without spending it.
+  // 复查要等系统回收进程树；这段等待由接缝承担，测试看得到它，却不用真的花掉。
   assert.deepEqual(os.sleeps, [700])
 })
 
 test('every pre-trigger refusal means taskkill is never called', async () => {
   const target = { pid: 200, ppid: 1, name: 'node', cmdline: 'node', createdMs: CREATED_MS, wsBytes: 0 }
-  // `self` is asserted on the pure gate below: driving it through killTree would
-  // mean handing the runner's own pid to a gate that a regression could let through.
+  // `self` 在下面的纯函数上断言：通过 killTree 驱动它，就得把测试运行器自己的
+  // pid 交给一道万一出错的检查。
   const cases = [
     ['disabled', { config: { allowKill: false }, probes: [aliveProbe()] }],
     ['whitelisted', { whitelistPids: new Set([200]), probes: [aliveProbe()] }],
@@ -254,8 +279,8 @@ test('every pre-trigger refusal means taskkill is never called', async () => {
     const os = fakeOs({ probes: over.probes })
     const result = await killTree({
       pid: 200,
-      // `??` would turn an explicit null into a valid time, so the field is read
-      // by presence: `missing_creation_time` really has to arrive as null.
+      // `??` 会把显式的 null 变成合法时间，因此这里按键是否存在取值：
+      // `missing_creation_time` 必须真的以 null 到达。
       seenCreatedMs: 'seenCreatedMs' in over ? over.seenCreatedMs : CREATED_MS,
       whitelistPids: over.whitelistPids ?? new Set(),
       config: over.config ?? {},
@@ -265,11 +290,11 @@ test('every pre-trigger refusal means taskkill is never called', async () => {
     assert.equal(result.ok, false, code)
     assert.equal(result.code, code)
     assert.deepEqual(os.taskkillCalls(), [], `${code} must not reach taskkill`)
-    // The post-kill recheck must not run either: there was nothing to recheck.
+    // 终止后的复查也不该运行：没有东西需要复查。
     assert.deepEqual(os.sleeps, [], code)
   }
 
-  // The self gate, on the pure function that decides it.
+  // self 检查，在决定它的纯函数上断言。
   assert.deepEqual(validateKillTarget({ pid: 4242, seenCreatedMs: 1000, facts: liveNode, selfPid: 4242 }), { ok: false, code: 'self' })
 })
 
@@ -295,8 +320,8 @@ test('a taskkill that fails says so, and a clean "not found" is still a death', 
   assert.match(result.detail, /Access is denied/)
   assert.deepEqual(failed.sleeps, [], 'a failed kill does not recheck')
 
-  // taskkill's own "no such process" is the target already being gone, which the
-  // recheck then confirms; it is not a failure of the guard.
+  // taskkill 自己报的“查无此进程”说明目标已经结束，后面的复查会确认这一点；这
+  // 不是检查失败。
   const notFound = fakeOs({
     probes: [aliveProbe(), goneProbe()],
     taskkill: { err: new Error('exit 128'), stdout: '', stderr: 'ERROR: The process "200" not found.' }

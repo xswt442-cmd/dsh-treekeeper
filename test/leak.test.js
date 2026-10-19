@@ -27,9 +27,8 @@ test('orphan detection finds survivors of dead parents', () => {
   assert.equal(found[0].pids[0], 7)
 })
 
-// The false positive the panel showed at every refresh: the desktop host is a
-// descendant of the root itself, its parent is the live Electron main process,
-// and that parent is never in the killable list because DSH does not own it.
+// 面板每次刷新都会出现的误报：桌面宿主本身是根的后代，它的父进程是活着的
+// Electron 主进程，而那个父进程从不在可终止列表里，因为 DSH 并不拥有它。
 test('a live parent outside the candidate list is not a dead parent', () => {
   const procs = [
     proc(12000, 1000, 'C:\\Windows\\Explorer.EXE', Date.now(), 'explorer'),
@@ -62,8 +61,8 @@ test('a previous-host survivor is an indicative investigation lead and never a c
   const procs = [
     proc(1, 0, 'node host.js'),
     proc(2, 1, 'node host-child.js'),
-    // Long-lived and plugin-hinted, but outside the host tree: the two rules
-    // that could have claimed it look only at attributed descendants.
+    // 存活很久、也带插件提示，但位于宿主树之外：能认领它的两条规则只看已归因
+    // 的宿主后代。
     proc(99001, 88888, 'node C:\\Users\\dev\\.dsh\\profiles\\web\\node_modules\\some-mcp\\index.js', Date.now() - 45 * 60 * 1000)
   ]
   const attribution = attribute(procs, new Map([[1, 'harness']]))

@@ -54,29 +54,22 @@ Two gates stop a tag before npm sees it: the tag must name
 2. Make sure every embedded fragment matches its canonical source in
    `dsh-mini-utility-dock`: the loopback predicates, the host request guard, and
    the host HTTP glue in `lib/shared.js`, and the utility launcher in
-   `lib/client.js`. `npm test` fails when one has drifted, and a sync script
-   rewrites every marked block in that file:
+   `lib/client.js`. `npm test` fails when a block the pinned dock knows has
+   drifted, and a sync script rewrites every marked block in that file:
 
    ```sh
+   npm run loopback:sync
    npm run guard:sync
    npm run http:sync
    npm run launcher:sync
    ```
 
-   A `check` only compares the marked blocks its pinned dock version knows, so a
-   block newer than that pin passes silently. Raise the pin and re-sync every
-   block in one commit: two pushes — old bytes under a new pin, or the reverse —
-   leave CI reporting ok about a file it never actually verified.
+   A `check` only compares the marked blocks its pinned dock version knows. Raise
+   the pin and re-sync every block in one commit; `AGENTS.md` states the
+   consequence for a block newer than that pin.
 
-3. Run the checks this repository documents — the same commands as `Verify` in
-   `AGENTS.md`:
-
-   ```sh
-   npm test
-   npm run docs:check
-   for f in lib/*.js; do node --check "$f"; done
-   npm pack --dry-run
-   ```
+3. Run every command in the `Verify` section of `AGENTS.md` against the tagged
+   commit.
 
 4. Commit and push the development branch, then open a pull request and wait for
    `compat` and `docs` to pass on it:
