@@ -3,6 +3,12 @@
 Release Notes 由对应版本段生成；最新版本在前。
 英文版见 [CHANGELOG.en.md](CHANGELOG.en.md)。
 
+## Unreleased
+
+### 修复
+
+- 修复任务账本读不到有主任务的问题：会话侧的「运行中 job 数」与 finding 的会话归属此前恒为空。
+
 ## 0.4.1 - 2026-10-19
 
 ### 维护

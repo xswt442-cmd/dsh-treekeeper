@@ -3,6 +3,12 @@
 Release notes are generated from the matching version section; newest first.
 For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+### Fixed
+
+- The job ledger reads its owned jobs again: a session's running-job count and a finding's session ownership were both permanently empty.
+
 ## 0.4.1 - 2026-10-19
 
 ### Maintenance
