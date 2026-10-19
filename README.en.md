@@ -87,7 +87,7 @@ Configuration is process-local and resets on restart.
 | Admission when the host has a Connection | Decided by the Connection's Host/Origin fence plus the signed cookie |
 | Admission when the host has no Connection | Decided by this plugin's guard: TCP peer address, Fetch Metadata, Origin, and loopback Host |
 | Mutating actions | POST-only |
-| Remote reach | On a host configured with `trustedHosts` and listening on `0.0.0.0`, a remote peer holding a valid browser session reaches the API, `kill` included |
+| Remote reach | On a host configured with `trustedHosts` and listening on a non-loopback address, a remote peer holding a valid browser session reaches the API, `kill` included |
 | Admission narrowing | This plugin does not narrow the host's Connection admission, and the kill guards below apply there as well |
 | Traversal cancellation | Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal |
 

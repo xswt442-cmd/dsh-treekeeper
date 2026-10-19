@@ -87,7 +87,7 @@ Subagent 分区有三种状态：
 | 准入：宿主有 Connection | 由 Connection 的 Host/Origin 校验与签名 cookie 决定 |
 | 准入：宿主无 Connection | 由本插件守卫按 TCP 对端地址、Fetch Metadata、Origin 与 loopback Host 判定 |
 | 写操作 | 仅接受 POST |
-| 远端可达 | 宿主配置 `trustedHosts` 且监听 `0.0.0.0` 时，持有有效浏览器会话的远端可调用包括 `kill` 在内的接口 |
+| 远端可达 | 宿主配置 `trustedHosts` 且在非回环地址上监听时，持有有效浏览器会话的远端可调用包括 `kill` 在内的接口 |
 | 准入收窄 | 本插件不额外收窄宿主的 Connection 准入，终止护栏在该情形下同样适用 |
 | 遍历取消 | 页面关闭、刷新被替代或 HTTP 断开时，进行中的 subagent 子代理树遍历收到取消信号 |
 
