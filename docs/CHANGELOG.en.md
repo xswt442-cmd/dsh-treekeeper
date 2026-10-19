@@ -32,13 +32,13 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 
 ### Maintenance
 
-- No behaviour changed: only the explanatory text in `lib/` and `test/` was rewritten; assertions, routes and termination gates are untouched.
+- The explanatory text in `lib/` and `test/` matches the current behaviour; assertions, routes and termination gates are unchanged.
 
 ## 0.3.5 - 2026-09-29
 
 ### Maintenance
 
-- Compatibility verification covers `0.2.0-rc.1`: one real boot on Windows and one on Linux.
+- The compatibility range includes DSH `0.2.0-rc.1`.
 
 ## 0.3.4 - 2026-09-29
 
