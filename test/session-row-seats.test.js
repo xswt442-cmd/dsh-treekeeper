@@ -129,7 +129,19 @@ function census() {
     parents: [
       { parentId: 'session-a', children: [{ id: 'child-1', status: 'idle', depth: 1 }] },
       { parentId: 'session-b', children: [{ id: 'child-9', status: 'idle', depth: 1 }] }
-    ]
+    ],
+    residency: {
+      // 驻留 N / 空闲 M；没有容量上限——那个配置读不到。
+      summary: { resident: 2, running: 0, idle: 1, unknown: 1 },
+      thresholdMs: 0,
+      findings: [],
+      rows: [
+        // 一个早已空闲却仍驻留的子代理：DSH 的 activity 会把它显示成 running。
+        { id: 'child-1', parentId: 'session-a', residency: 'idle-resident', confidence: 'exact', busyMs: 7_200_000, settledMs: 7_200_000, lastTurnCompleted: true },
+        // 缺 sessionQuery 的一行不带判定。
+        { id: 'child-9', parentId: 'session-b', residency: 'unknown', confidence: 'indicative', busyMs: null, settledMs: null, lastTurnCompleted: null }
+      ]
+    }
   }
 }
 
@@ -138,6 +150,7 @@ function boot({ runEffects = false } = {}) {
   const registered = []
   const injected = []
   const fetches = []
+  const posted = []
   const context = {
     AbortController,
     navigator: { language: 'en-US' },
@@ -153,7 +166,12 @@ function boot({ runEffects = false } = {}) {
     },
     window: { addEventListener() {}, removeEventListener() {}, __ModuleLoader__: { load() {} } },
     fetch: async (url, options) => {
-      fetches.push({ url, options })
+      // POST 的请求体解析出来，让断言能读它真的发了什么，而不只是发过什么。
+      if (options && options.method === 'POST') {
+        posted.push({ url: String(url), body: JSON.parse(String(options.body)) })
+      } else {
+        fetches.push({ url, options })
+      }
       // 普查是独立 action，回答的形状与快照不同；夹具按 url 分派，两条请求各自
       // 得到宿主会给出的那份负载。
       const body = String(url).includes('action=census') ? census() : snapshot()
@@ -176,7 +194,7 @@ function boot({ runEffects = false } = {}) {
     inject(services, mount) { mount({ slots, on() {} }) },
     on() {}
   })
-  return { plugin, react, registered, injected, fetches }
+  return { plugin, react, registered, injected, fetches, posted }
 }
 
 function seat(registered, name) {
@@ -309,4 +327,63 @@ test('the panel load fills the cache the row seats read, with one request for th
   assert.ok(mountOccupant(leading, { sessionId: 'session-a' }, react))
   assert.equal(mountOccupant(leading, { sessionId: 'session-b' }, react), null)
   assert.equal(fetches.length, 2, 'the seats must not add a request per row')
+})
+
+test('the census section reports residency levels instead of the store-membership flag', async () => {
+  const { plugin, react, registered } = boot({ runEffects: true })
+  plugin._tkTest.focusSession('session-a')
+  const panel = registered.find((entry) => entry.options.id === 'treekeeper-panel')
+  renderNode(panel.render(), react)
+  await new Promise((resolve) => setTimeout(resolve, 0))
+
+  // 普查是面板自己发起的异步请求，因此断言渲染的是它到达之后的那一棵树。
+  const censusSection = allNodes(renderNode(panel.render(), react), (node) => node.props?.key === 'tk-census')
+  assert.equal(censusSection.length, 1, 'the census is its own section')
+  const rendered = censusSection[0]
+  const text = textOf(rendered)
+
+  // 驻留 N / 空闲 M 来自宿主观测；容量上限读不到，因此不出现在这里。
+  assert.match(text, /resident 2/)
+  assert.match(text, /resident, idle 1/)
+  assert.ok(!/8/.test(text), 'no capacity figure is claimed')
+
+  // 驻留级取代 activity：一个早已空闲却仍驻留的子代理显示为「驻留空闲」，而
+  // 它的 catalog activity 在快照响应里是 running。
+  assert.match(text, /resident, idle/)
+  assert.match(text, /no verdict/)
+  // 措辞是驻留 / 空闲，不是泄漏。
+  assert.ok(!/leak/i.test(text))
+
+  // 释放默认关闭：开关未选中，且没有释放按钮。
+  const checkbox = allNodes(rendered, (node) => node.type === 'input' && node.props?.type === 'checkbox')
+  assert.equal(checkbox.length, 1)
+  assert.equal(checkbox[0].props.checked, false)
+  assert.equal(allNodes(rendered, (node) => String(node.props?.className || '').includes('tk-btn-release')).length, 0)
+
+  // 阈值输入按分钟给出，默认关闭。
+  assert.match(text, /promotion threshold: off/)
+  const minutes = allNodes(rendered, (node) => node.type === 'input' && node.props?.type === 'number')
+  assert.equal(minutes.length, 1)
+})
+
+test('enabling release from the panel posts its own switch and refreshes', async () => {
+  const { plugin, react, registered, fetches, posted } = boot({ runEffects: true })
+  plugin._tkTest.focusSession('session-a')
+  const panel = registered.find((entry) => entry.options.id === 'treekeeper-panel')
+  renderNode(panel.render(), react)
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  fetches.length = 0
+
+  const censusSection = allNodes(renderNode(panel.render(), react), (node) => node.props?.key === 'tk-census')
+  const rendered = censusSection[0]
+  const checkbox = allNodes(rendered, (node) => node.type === 'input' && node.props?.type === 'checkbox')[0]
+
+  await checkbox.props.onChange({ target: { checked: true } })
+  assert.equal(posted.length, 1)
+  assert.equal(posted[0].url, '/dsh-treekeeper/api?action=config')
+  assert.deepEqual(posted[0].body, { allowRelease: true })
+  assert.equal(fetches.some((call) => call.url === '/dsh-treekeeper/api?action=census'), true, 'the census reloads')
+
+  // 释放的请求体只有 childId：父由宿主谱系反查。
+  assert.ok(!posted.some((call) => JSON.stringify(call.body || {}).includes('parentId')))
 })

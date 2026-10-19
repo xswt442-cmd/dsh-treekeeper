@@ -23,7 +23,7 @@ test('the vocabulary domains are fixed and enumerable', () => {
   assert.deepEqual([...FINDING_CONFIDENCE], ['exact', 'indicative', 'inferred'])
   assert.deepEqual([...FINDING_SCOPE], ['host-descendant', 'session', 'job', 'unattributed'])
   assert.deepEqual([...FINDING_VIA], ['ppid-chain', 'root-itself', 'job-label', 'none'])
-  assert.deepEqual([...FINDING_RULE], ['duplicate.cmdline', 'orphan.dead-parent', 'orphan.previous-host', 'longlived.plugin-child'])
+  assert.deepEqual([...FINDING_RULE], ['duplicate.cmdline', 'orphan.dead-parent', 'orphan.previous-host', 'longlived.plugin-child', 'subagent.idle-resident'])
 })
 
 test('each heuristic names its own rule even when called on its own', () => {

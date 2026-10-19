@@ -180,10 +180,11 @@ test('lineage captures the services through inject and drops them on disposal', 
     get agents() { throw new Error('cannot get property "agents" without inject') },
     get subagents() { throw new Error('cannot get property "subagents" without inject') },
     inject(services, mount) {
-      assert.deepEqual(Array.from(services), ['agents', 'subagents'])
+      assert.deepEqual(Array.from(services), ['agents', 'subagents', 'sessionQuery'])
       mount({
         agents: { list: () => [ROOT, CHILD_A], get: (id) => (id === 'root-1' ? ROOT : undefined) },
         subagents: { drainChildren: async () => {} },
+        sessionQuery: undefined,
         on(event, listener) { if (event === 'dispose') dispose = listener }
       })
     }

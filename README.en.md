@@ -19,6 +19,7 @@ A Windows-focused DSH process-tree reconciliation and governance plugin. It puts
 - Attribute each process to the job that created it, and detect duplicate command lines, orphaned processes and long-running plugin children.
 - Reconcile the job ledger with the root session's subagent descendant tree; the descendant tree of any other session is never read.
 - A cross-session census listing the live subagents of every session, not only the currently selected tree.
+- A subagent residency level — `running` / `idle-resident` / `idle-parked` — taken from the turn timing projection rather than from store membership.
 - Release a resident subagent and return its capacity slot. An in-process `spawn` / `fork` subagent is one Agent inside the same process with no killable OS process behind it, so release goes through a host primitive rather than `taskkill`. Off by default.
 - Guarded tree termination (`taskkill /T /F`); the conditions are listed in the termination-guard table under "Safety and limits".
 - Identify the plugin a process belongs to from the `node_modules` path in its command line, and keep finding and termination history.
@@ -77,7 +78,27 @@ Configuration is process-local and resets on restart.
 | `pollMs` | `0` | `0` (sample on request) or 2000–600000 ms | Background sampling interval |
 | `allowKill` | `true` | Boolean | Enables guarded process-tree termination |
 | `allowRelease` | `false` | Boolean | Enables resident-subagent release, separate from `allowKill` |
+| `residencyThresholdMs` | `0` | `0` (off) or 60000–86400000 ms | Accumulated subagent turn time past which a row is promoted to a finding |
 | `extraWhitelistPids` | `[]` | Array of PIDs | Additional protected PIDs |
+
+## Subagent residency
+
+The residency level on the panel is an observable fact, not an alert:
+
+| Residency | Meaning |
+| --- | --- |
+| `running` | The projection holds a turn that has not closed |
+| `idle-resident` | The turn has settled and the Agent is still alive. It holds a capacity slot and can still be continued with `send_message` |
+| `idle-parked` | The child session is no longer in the store, so its capacity slot has been returned |
+| no verdict | The host exposes no `sessionQuery`, or the projection cannot be read |
+
+**Residency is not a leak.** Residency is by design — an idle subagent can still be continued — so it is not reported as a finding by default. Only accumulated turn time past `residencyThresholdMs` is promoted, and that threshold is off by default: how long counts as too long is your call.
+
+The threshold rests on what the projection can answer: `subagentTiming`'s `settledMs` is the accumulated duration of completed turns, and the current turn's duration comes from `now - active.since`. The projection does not record when the last turn ended, so how long a subagent has been idle cannot be derived, and the verdict does not rest on idle duration.
+
+The panel reports "resident N / idle M" and no capacity figure: `ctx.subagents.maxActiveSubagents` is a Volatile, private setting and cannot be read.
+
+Only children live in the agents lineage get a projection read; the diagnostic rows of `listDescendants` have no child session to read and are skipped.
 
 ## Releasing a resident subagent
 

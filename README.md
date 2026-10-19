@@ -19,6 +19,7 @@
 - 把每个进程归属到创建它的任务，并检测重复命令、孤儿进程与长时间运行的插件子进程。
 - 对照任务账本与根 session 的 subagent 子代理树，其他 session 的子代理树不读取。
 - 跨会话普查：列出全部 session 的存活子代理，而不只是当前选中的那一棵。
+- 子代理驻留级：`running` / `idle-resident` / `idle-parked`，取自 turn 时长投影而非 store 归属。
 - 释放驻留子代理：归还它的容量槽。in-process 的 spawn / fork 子代理是同进程里的一个 Agent，没有可杀的 OS 进程，因此释放走宿主原语而不是 `taskkill`。默认关闭。
 - 受保护的整树终止（`taskkill /T /F`），条件列在安全与边界的终止护栏表中。
 - 从命令行中的 `node_modules` 路径识别进程所属插件，findings 与终止操作历史写入记录文件。
@@ -77,7 +78,27 @@ Subagent 分区有三种状态：
 | `pollMs` | `0` | `0`（按请求采样）或 2000–600000 ms | 后台采样间隔 |
 | `allowKill` | `true` | 布尔值 | 受保护的进程树终止开关 |
 | `allowRelease` | `false` | 布尔值 | 驻留子代理释放开关，与 `allowKill` 分开 |
+| `residencyThresholdMs` | `0` | `0`（关闭）或 60000–86400000 ms | 子代理累计 turn 时长越过该值才升级为发现 |
 | `extraWhitelistPids` | `[]` | PID 数组 | 额外受保护的 PID |
+
+## 子代理驻留
+
+面板显示的驻留级是可观测事实，不是告警：
+
+| 驻留级 | 含义 |
+| --- | --- |
+| `running` | 投影里有未闭合的 turn |
+| `idle-resident` | turn 已结算，Agent 仍存活。它占着容量槽，且可以被 `send_message` 继续 |
+| `idle-parked` | 子会话已不在 store 中，容量槽已经归还 |
+| 无判定 | 宿主没有提供 `sessionQuery`，或投影读不出来 |
+
+**驻留不等于泄漏。** 驻留本身是设计：空闲的子代理可以被继续对话，因此默认不把它报成发现。只有累计 turn 时长越过 `residencyThresholdMs` 才升级，阈值默认关闭，由你决定多久算太久。
+
+阈值建立在投影能回答的量上：`subagentTiming` 的 `settledMs` 是已完成 turn 的累计时长，当前 turn 的时长由 `now - active.since` 得出。投影没有记录「最后一个 turn 何时结束」，因此空闲了多久算不出来，判定不建立在空闲时长上。
+
+面板只报「驻留 N / 空闲 M」，不报容量上限：`ctx.subagents.maxActiveSubagents` 是 Volatile 且 private 的配置，读不到。
+
+只有 agents 谱系里活着的子代才读投影；`listDescendants` 的诊断行没有子会话可读，被跳过。
 
 ## 驻留子代理释放
 

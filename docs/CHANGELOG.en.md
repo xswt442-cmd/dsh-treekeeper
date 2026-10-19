@@ -8,6 +8,7 @@ For Chinese, see [CHANGELOG.md](CHANGELOG.md).
 ### Added
 
 - A cross-session subagent census listing the live subagents of every session, not only the currently selected tree.
+- A subagent residency level of `running` / `idle-resident` / `idle-parked`, taken from the turn timing projection. Residency is by design, and only accumulated time past a configurable threshold is promoted to a finding.
 - Resident subagents can be released to return their capacity slot, through a host primitive rather than `taskkill`. Off by default and separate from the termination switch.
 
 ### Fixed

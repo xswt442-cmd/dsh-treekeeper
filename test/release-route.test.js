@@ -45,11 +45,12 @@ const get = (route, query) => {
  * `sample` 永远返回空树，因此任何终止路径都拿不到可终止的目标。
  * `noAgents` 挂载一个没有 agents 服务的宿主，用来断言能力缺失时如实说出来。
  */
-function bootHost({ home, agents = [], noAgents = false, subagents = null, deps = {} } = {}) {
+function bootHost({ home, agents = [], noAgents = false, noSessionQuery = false, subagents = null, deps = {} } = {}) {
   let route = null
   let disposeCleanup = null
   const live = new Map(agents.map((agent) => [agent.id, agent]))
   const drained = []
+  const observed = []
   const agentService = noAgents ? undefined : {
     list: () => agents,
     get: (id) => live.get(id)
@@ -57,18 +58,44 @@ function bootHost({ home, agents = [], noAgents = false, subagents = null, deps 
   const subagentService = subagents || {
     async drainChildren(parent, childIds) { drained.push({ parent: parent.id, childIds }) }
   }
+  // 一次投影观察的租约：读完必须释放，否则子会话的观察会留在宿主的准备缓存里。
+  // 投影按子会话 id 给出固定形状，因此断言不依赖请求顺序。
+  const leases = []
+  const TIMINGS = {
+    'child-idle': { settledMs: 7_200_000, lastTurnCompleted: true },
+    'child-running': { settledMs: 1000, active: { since: 1000, through: 1000 } }
+  }
+  const sessionQuery = noSessionQuery ? undefined : {
+    async observeSession(id, options) {
+      observed.push({ id, options })
+      let disposed = false
+      const lease = {
+        source: 'live',
+        projections: { asOfSeq: 3, values: { subagentTiming: TIMINGS[id] ?? { settledMs: 0 } } },
+        [Symbol.dispose]: () => { disposed = true }
+      }
+      leases.push({ id, disposed: () => disposed })
+      return lease
+    }
+  }
   apply({
     webServer: { port: 3080, register(value) { route = value; return () => {} } },
     ...(agentService ? { agents: agentService } : {}),
     subagents: subagentService,
+    ...(sessionQuery ? { sessionQuery } : {}),
     inject(names, mount) {
       if (names.includes('agents') && names.includes('subagents')) {
-        mount({ ...(agentService ? { agents: agentService } : {}), subagents: subagentService, on() {} })
+        mount({
+          ...(agentService ? { agents: agentService } : {}),
+          subagents: subagentService,
+          ...(sessionQuery ? { sessionQuery } : {}),
+          on() {}
+        })
       }
     },
     effect(fn) { disposeCleanup = fn() }
   }, { sample: async () => ({ procs: [], degraded: null }), ...deps })
-  return { route, drained, dispose: () => disposeCleanup() }
+  return { route, drained, observed, leases, dispose: () => disposeCleanup() }
 }
 
 function agent(id, { parent = null, origin = null, status = 'idle' } = {}) {
@@ -82,6 +109,8 @@ const ROOT = agent('root-1')
 const CHILD = agent('child-a', { parent: 'root-1', origin: 'subagent' })
 const OTHER_ROOT = agent('root-2')
 const OTHER_CHILD = agent('child-b', { parent: 'root-2', origin: 'subagent' })
+const IDLE_CHILD = agent('child-idle', { parent: 'root-1', origin: 'subagent' })
+const RUNNING_CHILD = agent('child-running', { parent: 'root-1', origin: 'subagent', status: 'running' })
 
 function useDshHome(home) {
   const previous = process.env.DSH_HOME
@@ -220,6 +249,95 @@ test('a malformed release body is a 400 before any guard reads a field', async (
   await route.handler(postRaw('{"childId":', '/dsh-treekeeper/api?action=release'), res)
   assert.equal(res.writes[0].status, 400)
   assert.equal(res.writes[1].body.code, 'bad_json')
+})
+
+// 驻留级判定
+
+test('residency levels come from the timing projection, and the lease is released', async (t) => {
+  const { route, observed, leases, dispose } = bootHost({ agents: [ROOT, IDLE_CHILD, RUNNING_CHILD] })
+  t.after(() => dispose())
+
+  const res = await get(route, '?action=census')
+  assert.equal(res.writes[0].status, 200)
+  const rows = res.writes[1].body.residency.rows
+
+  // 第一行：投影说 turn 已结算，Agent 仍存活——驻留且空闲。
+  const idle = rows.find((row) => row.id === 'child-idle')
+  assert.equal(idle.residency, 'idle-resident')
+  assert.equal(idle.confidence, 'exact')
+  assert.equal(idle.busyMs, 7_200_000)
+  // 第二行：投影里有开放的 turn。
+  const running = rows.find((row) => row.id === 'child-running')
+  assert.equal(running.residency, 'running')
+
+  // 摘要只报驻留与空闲，不报容量上限。
+  assert.deepEqual(res.writes[1].body.residency.summary.resident, 2)
+  assert.ok(!JSON.stringify(res.writes[1].body).includes('maxActiveSubagents'))
+
+  // 观察只对谱系里活着的子代发起，且每次读都释放租约。
+  assert.deepEqual(observed.map((row) => row.id).sort(), ['child-idle', 'child-running'])
+  assert.deepEqual(leases.map((lease) => lease.disposed()), [true, true], 'every observation lease is released')
+})
+
+test('without sessionQuery a residency row carries no verdict', async (t) => {
+  const { route, observed, dispose } = bootHost({ agents: [ROOT, IDLE_CHILD], noSessionQuery: true })
+  t.after(() => dispose())
+
+  const res = await get(route, '?action=census')
+  const row = res.writes[1].body.residency.rows.find((entry) => entry.id === 'child-idle')
+
+  // 读不到投影时不猜：驻留级是 unknown，置信度停在 indicative。
+  assert.equal(row.residency, 'unknown')
+  assert.equal(row.confidence, 'indicative')
+  assert.equal(row.busyMs, null)
+  assert.equal(res.writes[1].body.residency.summary.unknown, 1)
+  assert.deepEqual(observed, [])
+})
+
+test('residency is promoted to a finding only past the user threshold', async (t) => {
+  const { route, dispose } = bootHost({ agents: [ROOT, IDLE_CHILD] })
+  t.after(() => dispose())
+
+  // 默认关闭：判定照常显示，一块发现都没有。驻留本身是设计。
+  const before = await get(route, '?action=census')
+  assert.equal(before.writes[1].body.residency.findings.length, 0)
+  assert.equal(before.writes[1].body.residency.thresholdMs, 0)
+
+  // 打开到一个低于该行累计时长的阈值：这一行升级为发现。
+  await route.handler(postWith({ residencyThresholdMs: 3_600_000 }, '/dsh-treekeeper/api?action=config'), responseCapture())
+  const after = await get(route, '?action=census')
+  const findings = after.writes[1].body.residency.findings
+  assert.equal(findings.length, 1)
+  assert.equal(findings[0].rule, 'subagent.idle-resident')
+  assert.equal(findings[0].confidence, 'exact')
+  assert.match(findings[0].detail, /resident and idle/)
+  assert.deepEqual(findings[0].pids, [], 'a residency finding never becomes a tree-kill target')
+  assert.equal(after.writes[1].body.residency.thresholdMs, 3_600_000)
+
+  // 阈值可以再关回去。
+  await route.handler(postWith({ residencyThresholdMs: 0 }, '/dsh-treekeeper/api?action=config'), responseCapture())
+  assert.equal((await get(route, '?action=census')).writes[1].body.residency.findings.length, 0)
+})
+
+test('the residency threshold is narrowed to 0 or a bounded interval', async (t) => {
+  const { route, dispose } = bootHost({ agents: [ROOT, IDLE_CHILD] })
+  t.after(() => dispose())
+
+  for (const value of [1, 59999, 86400001, 'soon', {}, null, -1]) {
+    const res = responseCapture()
+    await route.handler(postWith({ residencyThresholdMs: value }, '/dsh-treekeeper/api?action=config'), res)
+    assert.equal(res.writes[0].status, 400, JSON.stringify({ residencyThresholdMs: value }))
+    assert.equal(res.writes[1].body.code, 'bad_residency_threshold_ms', JSON.stringify({ residencyThresholdMs: value }))
+  }
+  // 拒绝的值不会落进配置。
+  assert.equal((await get(route, '?action=census')).writes[1].body.residency.thresholdMs, 0)
+
+  for (const value of [0, 60000, 86400000]) {
+    const res = responseCapture()
+    await route.handler(postWith({ residencyThresholdMs: value }, '/dsh-treekeeper/api?action=config'), res)
+    assert.equal(res.writes[0].status, 200, String(value))
+    assert.equal(res.writes[1].body.config.residencyThresholdMs, value)
+  }
 })
 
 test('release never widens the kill scope: no taskkill, and every kill guard still holds', async (t) => {
