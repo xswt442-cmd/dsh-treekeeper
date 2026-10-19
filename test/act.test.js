@@ -138,6 +138,41 @@ test('kill ownership rejects a process outside the DSH host tree', () => {
   assert.deepEqual(validateKillOwnership(null, 1000), { ok: false, code: 'unattributed' })
 })
 
+test('kill ownership rejects a terminal session subtree, root and descendants alike', () => {
+  // 终端里跑着的 dev server 与 watcher 正被一个活着的 PTY 合法拥有。把它们当成
+  // 宿主树的残留去结束，等于结束用户正在用的东西。归因表因此把 pty 根和它下面
+  // 的每一行都排除在可终止范围之外——只排除 pty 自己那一行是不够的。
+  //
+  // 这条断言钉死这个结论：将来放宽归因判据（`rootLabel !== 'harness'` 这一句）
+  // 的人若不读这里，会静默地给终端归属的进程开闸。
+  const procs = [
+    { pid: 1, ppid: 0, name: 'node', cmdline: 'dsh host', createdMs: 1, wsBytes: 0 },
+    { pid: 900, ppid: 1, name: 'pwsh', cmdline: 'pwsh -NoLogo', createdMs: 1, wsBytes: 0 },
+    { pid: 901, ppid: 900, name: 'node', cmdline: 'node C:\\app\\dev.js', createdMs: 1, wsBytes: 0 },
+    { pid: 902, ppid: 901, name: 'node', cmdline: 'node C:\\app\\watcher.js', createdMs: 1, wsBytes: 0 }
+  ]
+  const attribution = Object.fromEntries(
+    attribute(procs, new Map([[1, 'harness'], [900, 'pty']])).attributed
+  )
+
+  for (const pid of [900, 901, 902]) {
+    const verdict = validateKillOwnership(attribution, pid)
+    assert.equal(verdict.ok, false, `pid ${pid} must not be terminable`)
+    // 单独的拒绝码，不并进 non_harness_root：这是「有人合法拥有它」，与「它不
+    // 属于本宿主」是两回事。
+    assert.equal(verdict.code, 'pty_owned', `pid ${pid}`)
+  }
+  // 宿主树本身不受影响，因此这条拒绝不是把归因表整个关掉。
+  assert.deepEqual(validateKillOwnership(attribution, 1), { ok: true, code: 'attributed' })
+
+  // 入口检查同样停住，因此 taskkill 之前就已经结束。
+  assert.deepEqual(decideKillEntry({
+    pid: 901, seenCreatedMs: 1,
+    snapshot: { procs, degraded: false }, takenAt: 1000, now: 1100, maxAgeMs: 15000,
+    attribution
+  }), { ok: false, code: 'pty_owned' })
+})
+
 test('kill ownership rejects descendants of a whitelisted root (REVIEW-0904 P1)', () => {
   // `extraWhitelistPids` 把登记的 pid 作为归因根，好让面板给它们打标签。授权
   // 这些桶等于把设置反过来用：保护一个 pid 会扩大可终止范围。

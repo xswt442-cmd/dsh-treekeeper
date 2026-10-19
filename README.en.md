@@ -18,6 +18,7 @@ A Windows-focused DSH process-tree reconciliation and governance plugin. It puts
 - Sample the current DSH host process tree; other children of the launcher are never attributed to it.
 - Attribute each process to the job that created it, and detect duplicate command lines, orphaned processes and long-running plugin children.
 - Reconcile the job ledger with the root session's subagent descendant tree; the descendant tree of any other session is never read.
+- A terminal session's reported pid is used as an exact attribution anchor, so processes started inside a terminal land under a `pty` root and are marked non-terminable.
 - A cross-session census listing the live subagents of every session, not only the currently selected tree.
 - A subagent residency level — `running` / `idle-resident` / `idle-parked` — taken from the turn timing projection rather than from store membership.
 - Release a resident subagent and return its capacity slot. An in-process `spawn` / `fork` subagent is one Agent inside the same process with no killable OS process behind it, so release goes through a host primitive rather than `taskkill`. Off by default.
@@ -147,6 +148,7 @@ Kill guards:
 | Identity check | The PID creation time is compared with the snapshot on entry |
 | Recheck before the kill | A fresh sample is taken and the creation time is compared again |
 | Attribution | Only processes whose attribution root is the DSH host may be terminated, and unattributed processes are investigation-only |
+| Terminal ownership | Processes attributed to a terminal session's pty, and their whole descendant subtree, are not terminable |
 | Never terminable | Critical system processes, the current host, its launcher chain, and `extraWhitelistPids` |
 | Whitelist | An extra whitelisted PID is an attribution root for investigation, and its descendants are visible but not terminable |
 | Protected descendants | If the tree sampled immediately before the kill contains any protected PID, the whole operation is refused |
@@ -156,6 +158,18 @@ A protected descendant that appears after that sample cannot be excluded.
 - Jobs have no stable PID mapping to OS processes.
 - Command-line matches are investigative and never trigger automatic action.
 - Findings and termination results are written to `$DSH_HOME/treekeeper/history.jsonl`.
+
+## Terminal session attribution
+
+There is no stable pid mapping between the job ledger and the OS, so reconciliation approximates the command line against the job label and reports `indicative`.
+
+A terminal session is the one exception: the snapshots from `ctx.terminals.list(owner)` carry a `pid`, and that is the single place DSH is willing to hand a pid to a plugin. Those pids join the same multi-root attribution as new roots, so a terminal session's **whole descendant subtree** lands under `rootLabel: 'pty'` — the processes started inside a terminal are all below the pty, and labelling the pty row alone would not be enough.
+
+A job row matching that pid is no longer `indicative`: it is marked `via: 'pty-pid'`, because a label match is two command-line texts containing each other while this is a pid the host itself reported.
+
+**Processes attributed to a `pty` root are not terminable.** A dev server, watcher or `npm install` running in a terminal is legitimately owned by a live PTY, and ending it as if it were residue of the host tree means ending what the user is working with. The whole terminal-owned subtree is owned by that pty, so the pty root and every row below it carry the refusal code `pty_owned`.
+
+On a host that does not expose terminal sessions, that whole path is absent: there is no `pty` attribution root, `FINDING_VIA` carries no `pty-pid`, and reconciliation keeps its previous shape.
 
 ## Development
 

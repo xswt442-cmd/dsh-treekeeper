@@ -22,7 +22,7 @@ const MCP = 'cmd /c npx -y @upstash/context7-mcp'
 test('the vocabulary domains are fixed and enumerable', () => {
   assert.deepEqual([...FINDING_CONFIDENCE], ['exact', 'indicative', 'inferred'])
   assert.deepEqual([...FINDING_SCOPE], ['host-descendant', 'session', 'job', 'unattributed'])
-  assert.deepEqual([...FINDING_VIA], ['ppid-chain', 'root-itself', 'job-label', 'none'])
+  assert.deepEqual([...FINDING_VIA], ['ppid-chain', 'root-itself', 'job-label', 'pty-pid', 'none'])
   assert.deepEqual([...FINDING_RULE], ['duplicate.cmdline', 'orphan.dead-parent', 'orphan.previous-host', 'longlived.plugin-child', 'subagent.idle-resident'])
 })
 

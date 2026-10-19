@@ -45,7 +45,7 @@ const get = (route, query) => {
  * `sample` 永远返回空树，因此任何终止路径都拿不到可终止的目标。
  * `noAgents` 挂载一个没有 agents 服务的宿主，用来断言能力缺失时如实说出来。
  */
-function bootHost({ home, agents = [], noAgents = false, noSessionQuery = false, subagents = null, deps = {} } = {}) {
+function bootHost({ home, agents = [], noAgents = false, noSessionQuery = false, terminals = null, subagents = null, deps = {} } = {}) {
   let route = null
   let disposeCleanup = null
   const live = new Map(agents.map((agent) => [agent.id, agent]))
@@ -78,12 +78,16 @@ function bootHost({ home, agents = [], noAgents = false, noSessionQuery = false,
       return lease
     }
   }
+  const terminalService = terminals ? { list: terminals } : null
   apply({
     webServer: { port: 3080, register(value) { route = value; return () => {} } },
     ...(agentService ? { agents: agentService } : {}),
     subagents: subagentService,
     ...(sessionQuery ? { sessionQuery } : {}),
+    ...(terminalService ? { terminals: terminalService } : {}),
     inject(names, mount) {
+      // 每个可选服务各自一个围栏；未挂载的服务不会出现在这里，因此插件读到的是
+      // 能力缺失，而不是一个空对象。
       if (names.includes('agents') && names.includes('subagents')) {
         mount({
           ...(agentService ? { agents: agentService } : {}),
@@ -91,6 +95,9 @@ function bootHost({ home, agents = [], noAgents = false, noSessionQuery = false,
           ...(sessionQuery ? { sessionQuery } : {}),
           on() {}
         })
+      }
+      if (names.includes('terminals') && terminalService) {
+        mount({ terminals: terminalService, on() {} })
       }
     },
     effect(fn) { disposeCleanup = fn() }
@@ -338,6 +345,71 @@ test('the residency threshold is narrowed to 0 or a bounded interval', async (t)
     assert.equal(res.writes[0].status, 200, String(value))
     assert.equal(res.writes[1].body.config.residencyThresholdMs, value)
   }
+})
+
+// 终端会话的精确 pid 锚点
+
+test('a reported pty pid labels its whole subtree and the kill route refuses it', async (t) => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'treekeeper-pty-'))
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }))
+  const restoreHome = useDshHome(home)
+  t.after(restoreHome)
+
+  // 终端会话的顶层 pid，以及它下面跑着的 dev server 与 watcher。
+  const host = { pid: process.pid, ppid: 0, name: 'node', cmdline: 'dsh host', createdMs: 900, wsBytes: 0 }
+  const pty = { pid: 900, ppid: process.pid, name: 'pwsh', cmdline: 'pwsh -NoLogo', createdMs: 900, wsBytes: 0 }
+  const dev = { pid: 901, ppid: 900, name: 'node', cmdline: 'node C:\\app\\dev.js', createdMs: 900, wsBytes: 0 }
+  const watcher = { pid: 902, ppid: 901, name: 'node', cmdline: 'node C:\\app\\watcher.js', createdMs: 900, wsBytes: 0 }
+
+  const killed = []
+  // 终端会话的顶层 pid 900 由宿主报告；它下面跑着 dev server 与 watcher。
+  const { route, dispose } = bootHost({
+    home,
+    agents: [ROOT],
+    terminals: () => [{ sessionId: 't1', type: 'pwsh', pid: 900, status: { kind: 'running' } }],
+    deps: {
+      sample: async () => ({ procs: [host, pty, dev, watcher], degraded: null }),
+      killTree: async (opts) => { killed.push(opts); return { ok: true, code: 'killed' } }
+    }
+  })
+  t.after(() => dispose())
+
+  const snap = await get(route, '?action=snapshot')
+  assert.equal(snap.writes[0].status, 200)
+  const attribution = snap.writes[1].body.processes
+    .reduce((acc, row) => Object.assign(acc, { [row.pid]: row.attribution }), {})
+
+  // 整棵后代子树都带上 pty，不只是 pty 自己那一行。
+  assert.equal(attribution[900].rootLabel, 'pty')
+  assert.equal(attribution[901].rootLabel, 'pty')
+  assert.equal(attribution[902].rootLabel, 'pty')
+  assert.equal(attribution[process.pid].rootLabel, 'harness')
+  assert.equal(snap.writes[1].body.reconcile.summary.ptyProcesses, 3)
+
+  // 每一行都被入口检查拒绝，taskkill 一次也没有执行。
+  for (const pid of [900, 901, 902]) {
+    const res = responseCapture()
+    await route.handler(postWith({ pid, seenCreatedMs: 900 }, '/dsh-treekeeper/api?action=kill'), res)
+    assert.equal(res.writes[0].status, 409, `pid ${pid}`)
+    assert.equal(res.writes[1].body.code, 'pty_owned', `pid ${pid}`)
+    assert.match(res.writes[1].body.error, /terminal session/)
+  }
+  assert.deepEqual(killed, [], 'a terminal-owned tree must never reach taskkill')
+})
+
+test('a host without terminal sessions degrades to the previous shape', async (t) => {
+  const host = { pid: process.pid, ppid: 0, name: 'node', cmdline: 'dsh host', createdMs: 900, wsBytes: 0 }
+  const child = { pid: 901, ppid: process.pid, name: 'node', cmdline: 'node worker.js', createdMs: 900, wsBytes: 0 }
+  const { route, dispose } = bootHost({ deps: { sample: async () => ({ procs: [host, child], degraded: null }) } })
+  t.after(() => dispose())
+
+  const snap = await get(route, '?action=snapshot')
+  const body = snap.writes[1].body
+
+  // 没有任何 pty 归属，摘要里也没有这一项的读数。
+  assert.equal(body.reconcile.summary.ptyProcesses, 0)
+  assert.equal(body.reconcile.summary.jobsExact, 0)
+  assert.ok(!JSON.stringify(body).includes('pty-pid'), 'the absent capability leaves no pty-pid in the payload')
 })
 
 test('release never widens the kill scope: no taskkill, and every kill guard still holds', async (t) => {
