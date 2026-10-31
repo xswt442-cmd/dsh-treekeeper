@@ -107,7 +107,7 @@ jobs:
         # channel belongs to the scheduled run's own judgement, not to a gate that
         # has to stay green to mean anything.
         #
-        # The floor is 0.2.0-rc.1 and the newest anchor is 0.2.1-rc.2. Nothing
+        # The floor is 0.2.0-rc.1 and the newest anchor is 0.2.1-rc.5. Nothing
         # below 0.2.0-rc.1 is tested, and nothing below it is declared either:
         # `engines.dsh` and the `@deepseek-ai/dsh` peer both say `>=0.2.0-rc.1`,
         # so the manifest and this job state one floor rather than a promise
@@ -127,11 +127,11 @@ jobs:
         # subagents.listDescendants, the shell.overlay slot and the locale
         # service — are unchanged from the 0.1.7 line up to it.
         #
-        # 0.2.1-rc.2 is the newest anchor and carries the same surface. The
+        # 0.2.1-rc.5 is the newest anchor and carries the same surface. The
         # webServer host config did change (wildcard addresses are rejected), but
         # this plugin reads only `ws.port` and a registered route, never the host
         # field, so the matrix stays green on either side.
-        dsh-spec: ['@0.2.0-rc.1', '@0.2.1-rc.2']
+        dsh-spec: ['@0.2.0-rc.1', '@0.2.1-rc.5']
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
