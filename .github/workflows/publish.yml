@@ -81,7 +81,7 @@ jobs:
           # without this check a tag cut on an unreviewed branch — or on a commit
           # that was never green anywhere — would publish to npm and cut a release.
           # Ancestry is the whole gate: the commit must be reachable from `main`,
-          # which means it went through a PR and the CI that ran on it.
+          # which means it went through CI on main.
           git fetch --quiet --no-tags origin '+refs/heads/main:refs/remotes/origin/main' || {
             echo "::error::cannot read origin/main; the release gate has nothing to compare against"
             exit 1

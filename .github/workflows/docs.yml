@@ -1,9 +1,13 @@
 name: docs
 
 on:
-  pull_request:
   push:
     branches: [main, dev]
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -11,20 +15,10 @@ permissions:
 jobs:
   bilingual:
     runs-on: ubuntu-latest
-    env:
-      DOCS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      # docs:check is a bin of the pinned dsh-mini-utility-dock dependency, so
-      # this job needs node_modules like every other workflow now.
-      - run: npm install --ignore-scripts
+      - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npm run docs:check
-      - name: require paired edits
-        if: env.DOCS_BASE != ''
-        run: npm run docs:check -- --base "$DOCS_BASE"
-

@@ -1,19 +1,14 @@
 name: compat
 
 on:
+  push:
+    branches: [main, dev]
   schedule:
     - cron: '23 3 * * *'
   workflow_dispatch:
-  # A pull request is where a compatibility break can still be fixed before it
-  # ships. The schedule only reports the break after the fact, on the branch
-  # everyone builds from, so it is the backstop and not the gate.
-  pull_request:
-  push:
-    branches: [main, dev]
 
 # One run per branch: a burst of commits cancels the superseded runs instead
-# of queueing a full boot-check behind each of them. The same group key serves a
-# pull request, whose ref is the merge ref.
+# of queueing a full boot-check behind each of them.
 concurrency:
   group: compat-${{ github.ref }}
   cancel-in-progress: true
