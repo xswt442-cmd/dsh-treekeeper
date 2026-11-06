@@ -10,7 +10,7 @@
 - Treat `lib/act.js`, the process allowlists, and the creation-time guards as safety-critical. Never widen what can be terminated without a test.
 - Keep finding confidence, scope, source, and rule values consistent across the host, the client, and the agent tools. Report unsupported platforms explicitly; do not add an unverified non-Windows sampler.
 - Ambient `sidebar.session.row.*` occupants read only cached client facts and never cause a host read.
-- Read optional DSH services only inside `ctx.inject(...)` callbacks.
+- Declare optional DSH services at registration time through `ctx.inject(...)`; read the current instance at request time through `lib/service.js`'s `readService`, and never cache it at module scope.
 - The DSH floor must agree in the README badge, `engines.dsh`, and the optional `@deepseek-ai/dsh` peer. Keep the range unbounded.
 
 ## Changelog
@@ -21,7 +21,7 @@
 
 ## Releases
 
-Maintainers commit straight to `dev` and fast-forward `main`; CI still runs when an outside pull request arrives. `docs/RELEASING.md` is the runbook; `scripts/release-notes.mjs` cuts release notes from `docs/CHANGELOG.md`.
+`docs/RELEASING.md` is the runbook; `scripts/release-notes.mjs` cuts release notes from `docs/CHANGELOG.md`. Branch and tag rules live in `.github/engineering/README.md`.
 
 ## Verify
 

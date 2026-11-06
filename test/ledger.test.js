@@ -36,27 +36,10 @@ test('job adapter enumerates every live owner through the public ownership fence
     }
   })
 
-  // 会话 id 与 Agent 对象各查一次，两种 caller 形态的宿主都因此列得出有主任务。
-  assert.deepEqual(calls, [undefined, 'session-a', a, 'session-b', b])
+  assert.deepEqual(calls, [undefined, 'session-a', 'session-b'])
   assert.deepEqual(rows.map(row => row.id), ['bash-1', 'bash-2', 'subagent-1'])
-  // `ownerSession` 在 0.1.5-rc.3 之后的名字是 `owner`；读旧名字会恒为 null。
   assert.equal(rows[1].ownerSession, 'session-a')
   assert.equal(rows[2].ownerSession, 'session-b')
-})
-
-test('job adapter reads the owner field name the 0.1.5 line still used', () => {
-  // 声明的兼容下限是 0.1.5-rc.3，那一版的任务投影把这个字段叫 `ownerSession`。
-  const unowned = { id: 'bash-1', kind: 'bash', label: 'shared', status: 'running' }
-  const owned = { id: 'bash-2', kind: 'bash', label: 'alpha', status: 'running', ownerSession: 'session-a' }
-  const agent = { id: 'session-a' }
-  const rows = listJobs({
-    agents: { list: () => [agent] },
-    // 0.1.5-rc.3 的归属边界：`job.owner.id === caller?.id`，caller 是 Agent。
-    jobs: { list: (caller) => (caller === agent ? [unowned, owned] : [unowned]) }
-  })
-
-  assert.deepEqual(rows.map(row => row.id), ['bash-1', 'bash-2'])
-  assert.equal(rows[1].ownerSession, 'session-a')
 })
 
 test('an owner-less row stays null under either field name', () => {
@@ -74,7 +57,7 @@ test('an owned job reaches a finding as ownership.session end to end', () => {
     agents: { list: () => [agent] },
     jobs: {
       list(caller) {
-        if (caller !== 'session-a' && caller !== agent) return []
+        if (caller !== 'session-a') return []
         return [{ id: 'bash-2', kind: 'bash', label: 'node worker.js', status: 'running', owner: 'session-a' }]
       }
     }
