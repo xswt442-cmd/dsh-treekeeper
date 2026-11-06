@@ -136,7 +136,7 @@ test('the census covers every session, not only the selected one', async (t) => 
   assert.equal(res.writes[0].status, 200)
   const body = res.writes[1].body
   assert.equal(body.availability, 'available')
-  // 泄漏恰恰发生在你不在看的那个会话里，因此普查不带根。
+  // 驻留的子代理可能在任何一个会话里，因此普查不带根。
   assert.deepEqual(body.parents.map((parent) => parent.parentId).sort(), ['root-1', 'root-2'])
   assert.deepEqual(body.parents.find((parent) => parent.parentId === 'root-1').children.map((child) => child.id), ['child-a'])
   // 释放默认关。
@@ -397,7 +397,7 @@ test('a reported pty pid labels its whole subtree and the kill route refuses it'
   assert.deepEqual(killed, [], 'a terminal-owned tree must never reach taskkill')
 })
 
-test('a host without terminal sessions degrades to the previous shape', async (t) => {
+test('a host without terminal sessions reports no pty attribution', async (t) => {
   const host = { pid: process.pid, ppid: 0, name: 'node', cmdline: 'dsh host', createdMs: 900, wsBytes: 0 }
   const child = { pid: 901, ppid: process.pid, name: 'node', cmdline: 'node worker.js', createdMs: 900, wsBytes: 0 }
   const { route, dispose } = bootHost({ deps: { sample: async () => ({ procs: [host, child], degraded: null }) } })

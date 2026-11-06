@@ -143,8 +143,8 @@ test('kill ownership rejects a terminal session subtree, root and descendants al
   // 宿主树的残留去结束，等于结束用户正在用的东西。归因表因此把 pty 根和它下面
   // 的每一行都排除在可终止范围之外——只排除 pty 自己那一行是不够的。
   //
-  // 这条断言钉死这个结论：将来放宽归因判据（`rootLabel !== 'harness'` 这一句）
-  // 的人若不读这里，会静默地给终端归属的进程开闸。
+  // 断言直接覆盖每一行：放宽 `rootLabel !== 'harness'` 这一句会让它失败，而不会
+  // 静默地给终端归属的进程开闸。
   const procs = [
     { pid: 1, ppid: 0, name: 'node', cmdline: 'dsh host', createdMs: 1, wsBytes: 0 },
     { pid: 900, ppid: 1, name: 'pwsh', cmdline: 'pwsh -NoLogo', createdMs: 1, wsBytes: 0 },
@@ -173,7 +173,7 @@ test('kill ownership rejects a terminal session subtree, root and descendants al
   }), { ok: false, code: 'pty_owned' })
 })
 
-test('kill ownership rejects descendants of a whitelisted root (REVIEW-0904 P1)', () => {
+test('kill ownership rejects descendants of a whitelisted root', () => {
   // `extraWhitelistPids` 把登记的 pid 作为归因根，好让面板给它们打标签。授权
   // 这些桶等于把设置反过来用：保护一个 pid 会扩大可终止范围。
   const procs = [
@@ -194,7 +194,7 @@ test('kill ownership rejects descendants of a whitelisted root (REVIEW-0904 P1)'
   assert.deepEqual(validateKillOwnership(attribution, 1), { ok: true, code: 'attributed' })
 })
 
-test('killTree refuses when a protected pid is a descendant (Problem 3)', async () => {
+test('killTree refuses when a protected pid is a descendant', async () => {
   const procs = [
     { pid: 200, ppid: 1, name: 'node', cmdline: 'node parent', createdMs: 100, wsBytes: 0 },
     { pid: 201, ppid: 200, name: 'node', cmdline: 'node child', createdMs: 100, wsBytes: 0 }

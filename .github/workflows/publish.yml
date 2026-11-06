@@ -147,9 +147,8 @@ jobs:
 
   # The only job with a repository-write token, and the only one that does not run
   # code from the pull: it reads one CHANGELOG section and calls `gh`. It depends on
-  # the checks but not on the npm step, so a version published out of band — like
-  # the first one, before npm knew this package name at all — still gets its notes,
-  # and a registry hiccup does not take the release down with it.
+  # the checks but not on the npm step, so a version already on the registry still
+  # gets its notes, and a registry hiccup does not take the release down with it.
   release:
     name: GitHub release from changelog
     needs: [checks, npm]

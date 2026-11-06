@@ -402,7 +402,7 @@ test('the sampler platform verdict keeps its own code', async (t) => {
   const { route } = bootRoute({
     deps: {
       sample: () => {
-        const error = new Error('treekeeper: only Windows sampling is implemented in this skeleton (saw platform linux)')
+        const error = new Error('treekeeper: only Windows sampling is implemented (saw platform linux)')
         error.code = 'unsupported_platform'
         throw error
       }

@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   RESIDENCY, residencyOf, residencyBusyMs, residencyConfidence, classifyResidency,
-  residencySummary, residencyFindings, RESIDENCY_RULE_DESCRIPTION
+  residencySummary, residencyFindings
 } from '../lib/residency.js'
 import { buildLineage } from '../lib/lineage.js'
 import { FINDING_CONFIDENCE, FINDING_RULE, FINDING_RULE_DESCRIPTION } from '../lib/shared.js'
@@ -158,7 +158,7 @@ test('only rows past the user threshold are promoted, and a disabled threshold p
   assert.ok(FINDING_RULE.includes(finding.rule))
   assert.deepEqual(finding.provenance, {
     rule: 'subagent.idle-resident',
-    description: RESIDENCY_RULE_DESCRIPTION['subagent.idle-resident']
+    description: FINDING_RULE_DESCRIPTION['subagent.idle-resident']
   })
   // 措辞是驻留 / 空闲，不是泄漏：驻留本身是设计。
   assert.match(finding.detail, /resident and idle/)
@@ -171,13 +171,4 @@ test('only rows past the user threshold are promoted, and a disabled threshold p
   assert.deepEqual(residencyFindings(rows, { thresholdMs: null }), [])
   // 刚好等于阈值不算越线。
   assert.deepEqual(residencyFindings([{ ...rows[0], busyMs: 3_600_000 }], { thresholdMs: 3_600_000 }), [])
-})
-
-test('the residency rule description lives in the shared vocabulary too', () => {
-  // 两处说明必须一致：宿主用它填 finding 的 provenance，lib/residency.js 用它
-  // 填同一处。
-  assert.equal(
-    FINDING_RULE_DESCRIPTION['subagent.idle-resident'],
-    RESIDENCY_RULE_DESCRIPTION['subagent.idle-resident']
-  )
 })

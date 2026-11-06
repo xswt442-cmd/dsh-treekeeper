@@ -12,7 +12,7 @@ This directory holds one index. Every kind of information has a single home; do 
 | Agent constraints | `AGENTS.md`; `CLAUDE.md` is its entry point |
 | Engineering conventions | this file |
 
-- Both changelogs keep the same sections, bullet count, and order; `npm run docs:check` compares the pairs declared in this repository.
+- Both changelogs keep the same sections, bullet count, and order; `npm run docs:check` compares the declared pairs' heading structure and changelog section counts, so bullet parity is maintained by hand.
 - GitHub release notes are extracted verbatim from the matching `docs/CHANGELOG.md` section by `scripts/release-notes.mjs`. Do not maintain a second copy.
 - Tracked documents describe shipped behavior only: no personal paths, machine state, implementation logs, or future plans.
 
@@ -24,8 +24,7 @@ This directory holds one index. Every kind of information has a single home; do 
 
 ## Actions
 
-- `ci` / `compat` / `docs` run on pushes to `main` and `dev`, on `pull_request`, on `workflow_dispatch`, and (compat) on the nightly schedule. `publish` runs only on a `v*` tag.
-- CI runs on `pull_request` so outside contributions are tested; there are no PR templates, paired-edit gates, or review bots.
+- `compat` and `docs` run on pushes to `main` and `dev`, on `pull_request`, and on `workflow_dispatch`; `compat` also runs on the nightly schedule. `publish` runs only on a `v*` tag.
 - Every workflow sets `permissions: contents: read` at the top; only the job that creates the GitHub release declares write access. CI workflows cancel superseded runs per ref; publishes queue and are never cancelled.
 - `actions/checkout` and `actions/setup-node` use the same pinned versions across the workflows.
 

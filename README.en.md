@@ -27,7 +27,7 @@ A Windows-focused DSH process-tree reconciliation and governance plugin. It puts
 - The DSH host descendants section is collapsed by default, with its count on the heading.
 - The panel header shows the host kind, taken from the host process's executable path and command line; the process environment is not part of the decision.
 - The desktop application's own Electron processes are listed as one group inside the unattributed section, and each member keeps its command line, pid, memory and age.
-- A finding carries one of three confidence tiers: `exact`, confirmed by attribution into the host process tree and eligible for a tree kill; `indicative`, where the process fact is real and the attribution link is softer or missing (a degraded sample, or a survivor left by a previous host); `inferred`, produced by a heuristic rule alone and never eligible.
+- A finding carries one of three confidence tiers: `exact`, confirmed by attribution into the host process tree; `indicative`, where the process fact is real and the attribution link is softer or missing (a degraded sample, or a survivor left by a previous host); `inferred`, produced by a heuristic rule alone. Termination is decided separately by the attribution root: only processes rooted at the host itself can be terminated, and processes attributed to a terminal session never can.
 - The `dsh-mini-utility-dock` launcher at the bottom-left opens the global panel, a session header opens it focused on that session, and a sidebar Session row shows the cached facts for that session.
 
 ## Install
@@ -93,7 +93,7 @@ The residency level on the panel is an observable fact, not an alert:
 | `idle-parked` | The child session is no longer in the store, so its capacity slot has been returned |
 | no verdict | The host exposes no `sessionQuery`, or the projection cannot be read |
 
-**Residency is not a leak.** Residency is by design — an idle subagent can still be continued — so it is not reported as a finding by default. Only accumulated turn time past `residencyThresholdMs` is promoted, and that threshold is off by default: how long counts as too long is your call.
+Residency is by design: an idle subagent can still be continued, so it is not reported as a finding by default. Only accumulated turn time past `residencyThresholdMs` is promoted, and that threshold is off by default; the configuration states the value in milliseconds.
 
 The threshold rests on what the projection can answer: `subagentTiming`'s `settledMs` is the accumulated duration of completed turns, and the current turn's duration comes from `now - active.since`. The projection does not record when the last turn ended, so how long a subagent has been idle cannot be derived, and the verdict does not rest on idle duration.
 
@@ -134,9 +134,9 @@ The plugin reports no capacity figure: `ctx.subagents.maxActiveSubagents` is a V
 | Admission when the host has a Connection | Decided by the Connection's Host/Origin fence plus the signed cookie |
 | Admission when the host has no Connection | Decided by this plugin's guard: TCP peer address, Fetch Metadata, Origin, and loopback Host |
 | Mutating actions | POST-only |
+| Traversal cancellation | Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal and the cross-session census |
 | Remote reach | On a host configured with `trustedHosts` and listening on a non-loopback address, a remote peer holding a valid browser session reaches the API, `kill` included |
 | Admission narrowing | This plugin does not narrow the host's Connection admission, and the kill guards below apply there as well |
-| Traversal cancellation | Closing the panel, superseding a refresh, or disconnecting the HTTP request cancels an in-flight subagent descendant traversal and the cross-session census |
 
 Kill guards:
 
@@ -169,7 +169,7 @@ A job row matching that pid is no longer `indicative`: it is marked `via: 'pty-p
 
 **Processes attributed to a `pty` root are not terminable.** A dev server, watcher or `npm install` running in a terminal is legitimately owned by a live PTY, and ending it as if it were residue of the host tree means ending what the user is working with. The whole terminal-owned subtree is owned by that pty, so the pty root and every row below it carry the refusal code `pty_owned`.
 
-On a host that does not expose terminal sessions, that whole path is absent: there is no `pty` attribution root, `FINDING_VIA` carries no `pty-pid`, and reconciliation keeps its previous shape.
+On a host that does not expose terminal sessions, that whole path is absent: there is no `pty` attribution root and `FINDING_VIA` carries no `pty-pid`; every job row is then joined by label alone.
 
 ## Development
 

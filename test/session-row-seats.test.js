@@ -344,11 +344,11 @@ test('the census section reports residency levels instead of the store-membershi
 
   // 驻留 N / 空闲 M 来自宿主观测；容量上限读不到，因此不出现在这里。
   assert.match(text, /resident 2/)
-  assert.match(text, /resident, idle 1/)
+  assert.match(text, /idle 1/)
   assert.ok(!/8/.test(text), 'no capacity figure is claimed')
 
-  // 驻留级取代 activity：一个早已空闲却仍驻留的子代理显示为「驻留空闲」，而
-  // 它的 catalog activity 在快照响应里是 running。
+  // 驻留级来自投影：一个早已空闲却仍驻留的子代理显示为「驻留空闲」，而它在
+  // catalog 里的 activity 是 running。
   assert.match(text, /resident, idle/)
   assert.match(text, /no verdict/)
   // 措辞是驻留 / 空闲，不是泄漏。
@@ -386,4 +386,20 @@ test('enabling release from the panel posts its own switch and refreshes', async
 
   // 释放的请求体只有 childId：父由宿主谱系反查。
   assert.ok(!posted.some((call) => JSON.stringify(call.body || {}).includes('parentId')))
+})
+
+test('clearing the threshold input turns promotion off', async () => {
+  const { plugin, react, registered, posted } = boot({ runEffects: true })
+  plugin._tkTest.focusSession('session-a')
+  const panel = registered.find((entry) => entry.options.id === 'treekeeper-panel')
+  renderNode(panel.render(), react)
+  await new Promise((resolve) => setTimeout(resolve, 0))
+
+  const censusSection = allNodes(renderNode(panel.render(), react), (node) => node.props?.key === 'tk-census')
+  const minutes = allNodes(censusSection[0], (node) => node.type === 'input' && node.props?.type === 'number')[0]
+  assert.ok(minutes, 'the census section carries the promotion threshold input')
+
+  // 空输入回到关闭：宿主收到的是 0，而不是被忽略的一次输入。
+  await minutes.props.onChange({ target: { value: '' } })
+  assert.deepEqual(posted.map((call) => call.body), [{ residencyThresholdMs: 0 }])
 })

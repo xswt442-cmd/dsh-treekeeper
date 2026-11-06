@@ -45,8 +45,8 @@ test('a job backed by a reported pty pid joins exactly instead of indicatively',
   assert.equal(result.summary.ptyProcesses, 0, 'the matched pid is not listed again as an os-only row')
 })
 
-test('a host without terminal sessions keeps the pre-anchor shape', () => {
-  // 服务缺失时 ptyPids 为 null：FINDING_VIA 里不会出现 pty-pid，形态与之前一致。
+test('a host without terminal sessions joins every job row by label', () => {
+  // 服务缺失时 ptyPids 为 null：FINDING_VIA 里不会出现 pty-pid，任务行只按 label 对账。
   const result = reconcile([
     { id: 'bash-1', label: 'node worker.js', status: 'running', ownerSession: 'session-1', startedAt: 50 }
   ], procs, new Map([[10, { rootLabel: 'harness', depth: 1 }]]), { ptyPids: null })

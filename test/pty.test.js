@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createTerminalIndex, ptyRoots, ptyOwnerOf } from '../lib/pty.js'
+import { createTerminalIndex, ptyRoots } from '../lib/pty.js'
 import { attribute } from '../lib/attribute.js'
 import { validateKillOwnership, decideKillEntry } from '../lib/act.js'
 
@@ -83,14 +83,6 @@ test('one owner failing to list does not hide the other sessions', () => {
   assert.deepEqual([...read.pids.keys()], [200])
 })
 
-test('the exact owner of a pid is readable back', () => {
-  const index = { pids: new Map([[100, { sessionId: 't1', ownerId: 'root-1' }]]), sessions: 1 }
-
-  assert.deepEqual(ptyOwnerOf(index, 100), { sessionId: 't1', ownerId: 'root-1' })
-  assert.equal(ptyOwnerOf(index, 999), null)
-  assert.equal(ptyOwnerOf(null, 100), null)
-})
-
 test('the index captures terminals through inject and drops them on disposal', () => {
   let dispose = null
   const guarded = {
@@ -110,8 +102,8 @@ test('the index captures terminals through inject and drops them on disposal', (
   assert.equal(index.read(() => [ROOT]), null)
 })
 
-// 终端归属的进程树不可终止。这条结论必须被钉死：将来放宽归因判据的人不会看到
-// 本文件，就不会知道这里曾经有一个明确的拒绝。
+// 终端归属的进程树不可终止。断言落在这一条上：放宽归因判据的改动会让本文件
+// 失败，而不是悄悄地给终端归属的进程开闸。
 
 test('a process owned by a live terminal session is never a kill target', () => {
   const procs = [

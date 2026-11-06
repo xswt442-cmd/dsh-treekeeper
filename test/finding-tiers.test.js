@@ -227,7 +227,7 @@ test('attributed findings stay expanded with kill buttons; chainless ones collap
   }
 })
 
-test('kill buttons follow harness attribution, not evidence alone (REVIEW-0904 P1)', () => {
+test('kill buttons follow harness attribution, not evidence alone', () => {
   const data = fixtureData()
   // 登记根的后代是“已归因”的，`evidence` 会说 'exact'，但它不属于 DSH 宿主树：
   // 在那里提供终止按钮既谎报服务器会接受，也把保护变成了扩大范围。

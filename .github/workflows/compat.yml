@@ -27,10 +27,7 @@ jobs:
       matrix:
         # 20 is the `engines.node` floor and the only version here a user may be
         # stuck on; 24 is the version development and the other jobs in this
-        # repository run on, so it is what a release is actually cut against. The
-        # floor has been stated in package.json without ever being executed, which
-        # is how a `structuredClone` or a newer `fs/promises` call lands in a
-        # release.
+        # repository run on, so it is what a release is actually cut against.
         node: [20, 24]
     steps:
       - uses: actions/checkout@v5
@@ -47,8 +44,7 @@ jobs:
         run: npm install --ignore-scripts
       - name: lib syntax
         # Every file in lib/, not the two entry points: the guard gates, the
-        # sampler and the history store are where the Windows-only logic lives,
-        # and a syntax error in any of them used to reach a runner untouched.
+        # sampler and the history store carry the Windows-only logic.
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -79,11 +75,9 @@ jobs:
           if ($shared -notmatch [regex]::Escape("VERSION = '$($pkg.version)'")) { Write-Error 'lib/shared.js VERSION does not match package version' }
 
   # The shared host fragments are verified locally by `npm test`, which runs
-  # loopback:check / guard:check / http:check against the pinned dock version. A
-  # cross-repo comparison is not run here: its property cannot hold while a peer
-  # checkout resolves to a different branch. `dsh-plugin-parity` (from the dock)
-  # stays available as a manual diagnostic for when every checkout shares a
-  # branch.
+  # loopback:check / guard:check / http:check against the pinned dock version.
+  # `dsh-plugin-parity` (from the dock) is a manual diagnostic for when every
+  # checkout shares a branch.
   boot-check:
     # The two matrix cells are not the same inspection, and the name says so:
     # this plugin's product is a Windows process tree, so the Linux cell proves
@@ -104,30 +98,18 @@ jobs:
         # channel belongs to the scheduled run's own judgement, not to a gate that
         # has to stay green to mean anything.
         #
-        # The floor is 0.2.0-rc.1 and the newest anchor is 0.2.1-rc.5. Nothing
-        # below 0.2.0-rc.1 is tested, and nothing below it is declared either:
-        # `engines.dsh` and the `@deepseek-ai/dsh` peer both say `>=0.2.0-rc.1`,
-        # so the manifest and this job state one floor rather than a promise
-        # nobody executes.
+        # The floor is 0.2.0-rc.1 and the newest anchor is 0.2.1-rc.5. `engines.dsh`
+        # and the `@deepseek-ai/dsh` peer both say `>=0.2.0-rc.1`, so the manifest
+        # and this job state one floor.
         #
-        # The 0.1.x lines were dropped on purpose. 0.1.7-rc.2 earned its leg by
-        # pinning the settings migration (settingsScope -> configForms), and that
-        # behaviour is still covered by unit tests; what the boot job bought was
-        # proof against a real host, and that is only worth its runner minutes
-        # while the line is supported. 0.1.5 additionally stopped being
-        # bootable — its tree fails to load @deepseek-ai/dsh-sandbox-local, which
-        # the launcher of that era cannot resolve — so that leg was a standing
-        # red that taught nothing.
+        # 0.2.0-rc.1 is the floor because the plugin-facing APIs this plugin reads
+        # — webServer.register, connection.requestRejection, jobs.list,
+        # subagents.listDescendants, the shell.overlay slot and the locale service
+        # — are unchanged between the two anchors.
         #
-        # 0.2.0-rc.1 is the floor because the plugin-facing APIs this plugin
-        # reads — webServer.register, connection.requestRejection, jobs.list,
-        # subagents.listDescendants, the shell.overlay slot and the locale
-        # service — are unchanged from the 0.1.7 line up to it.
-        #
-        # 0.2.1-rc.5 is the newest anchor and carries the same surface. The
-        # webServer host config did change (wildcard addresses are rejected), but
-        # this plugin reads only `ws.port` and a registered route, never the host
-        # field, so the matrix stays green on either side.
+        # The webServer host config differs between the anchors: 0.2.1-rc.2 rejects
+        # wildcard addresses. This plugin reads only `ws.port` and a registered
+        # route, never the host field, so the matrix stays green on either side.
         dsh-spec: ['@0.2.0-rc.1', '@0.2.1-rc.5']
     runs-on: ${{ matrix.os }}
     steps:

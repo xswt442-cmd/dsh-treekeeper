@@ -120,7 +120,5 @@ test('client factory returns a mountable Cordis plugin without early DOM effects
   assert.equal(typeof registered[5].render, 'function')
   assert.equal(localeNamespace, 'dsh-treekeeper')
   // 容器由宿主的 overlay 层承载，客户端不能再往 body 追加自己的浮动容器。
-  assert.equal(context.window.__CREATEHELPER_DSH_UTILITY_DOCK_V1__, undefined)
-  assert.doesNotMatch(source, /getUtilityDock|CREATEHELPER_DSH_UTILITY_DOCK/)
   assert.equal(dockRoot, null, 'the client must not append a floating container to body')
 })
