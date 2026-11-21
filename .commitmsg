@@ -1,9 +1,0 @@
-docs: clear every wording finding in the README
-
-- Three bullets carried three sentences each; merged where the parts
-  belong together.
-- pid and PID were mixed in running text; PID on its own is the process
-  identifier, `pid` stays inside code spans.
-- 读不出 and 读不到 become 无法读取.
-
-0 error, 0 warning.
