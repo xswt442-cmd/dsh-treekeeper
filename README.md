@@ -18,10 +18,10 @@
 - 采样当前 DSH 宿主的进程树，启动器的其他子进程不归入该树。
 - 把每个进程归属到创建它的任务，并检测重复命令、孤儿进程与长时间运行的插件子进程。
 - 对照任务账本与根 session 的 subagent 子代理树，其他 session 的子代理树不读取。
-- 以终端会话报告的 pid 作为精确归因锚点，终端里跑着的进程归到 `pty` 根下并标为不可终止。
+- 以终端会话报告的 PID 作为精确归因锚点，终端里跑着的进程归到 `pty` 根下并标为不可终止。
 - 跨会话普查：列出全部 session 的存活子代理，而不只是当前选中的那一棵。
 - 子代理驻留级：`running` / `idle-resident` / `idle-parked`，取自 turn 时长投影而非 store 归属。
-- 释放驻留子代理：归还它的容量槽。in-process 的 spawn / fork 子代理是同进程里的一个 Agent，没有可杀的 OS 进程，因此释放走宿主原语而不是 `taskkill`。默认关闭。
+- 释放驻留子代理：归还它的容量槽。in-process 的 spawn / fork 子代理是同进程里的一个 Agent，没有可杀的 OS 进程，所以释放走宿主原语而不是 `taskkill`，这个模式默认关闭。
 - 受保护的整树终止（`taskkill /T /F`），条件列在安全与边界的终止护栏表中。
 - 从命令行中的 `node_modules` 路径识别进程所属插件，findings 与终止操作历史写入记录文件。
 - DSH 宿主子进程分区默认收起，数量显示在标题上。
@@ -91,13 +91,13 @@ Subagent 分区有三种状态：
 | `running` | 投影里有未闭合的 turn |
 | `idle-resident` | turn 已结算，Agent 仍存活。它占着容量槽，且可以被 `send_message` 继续 |
 | `idle-parked` | 子会话已不在 store 中，容量槽已经归还 |
-| 无判定 | 宿主没有提供 `sessionQuery`，或投影读不出来 |
+| 无判定 | 宿主没有提供 `sessionQuery`，或投影无法读取 |
 
 驻留本身是设计：空闲的子代理可以被继续对话，因此默认不把它报成发现。只有累计 turn 时长越过 `residencyThresholdMs` 才升级；该阈值默认关闭，值按毫秒配置。
 
 阈值建立在投影能回答的量上：`subagentTiming` 的 `settledMs` 是已完成 turn 的累计时长，当前 turn 的时长由 `now - active.since` 得出。投影没有记录「最后一个 turn 何时结束」，因此空闲了多久算不出来，判定不建立在空闲时长上。
 
-面板只报「驻留 N / 空闲 M」，不报容量上限：`ctx.subagents.maxActiveSubagents` 是 Volatile 且 private 的配置，读不到。
+面板只报「驻留 N / 空闲 M」，不报容量上限：`ctx.subagents.maxActiveSubagents` 是 Volatile 且 private 的配置，无法读取。
 
 只有 agents 谱系里活着的子代才读投影；`listDescendants` 的诊断行没有子会话可读，被跳过。
 
@@ -105,8 +105,8 @@ Subagent 分区有三种状态：
 
 释放与树杀是两种不同的处置：
 
-- **释放**归还一个驻留子代理占着的容量槽（默认容量 8，按顶层会话一个池）。它走宿主公开原语 `drainChildren`。释放之后这个子代理不能再被 `send_message` 继续。
-- **停止当前 turn** 只停当前这一轮，不释放驻留。子代理仍然占着容量槽，仍然可以被继续对话。本插件不做这个动作。
+- **释放**归还一个驻留子代理占着的容量槽（默认容量 8，按顶层会话一个池），走宿主公开原语 `drainChildren`。释放之后这个子代理不能再被 `send_message` 继续。
+- **停止当前 turn** 只停当前这一轮，不释放驻留。子代理仍然占着容量槽，仍然可以被继续对话，本插件不执行这个动作。
 
 驻留子代理可能根本没有对应的 OS 进程——in-process 的 `spawn` / `fork` 子代理就是宿主进程里的一个 Agent。因此释放**不会**附带任何 `taskkill`：树杀会连带结束它自己的后代树，而那与释放无关。
 
@@ -121,7 +121,7 @@ Subagent 分区有三种状态：
 | 父会话来源 | 父会话由服务端谱系反查，请求体里的 `parentId` 不参与判定 |
 | 读面 | 只读 `session.header` 的 `parentSession` / `origin` 与 `Agent.status`，不读会话内容，不读日志 |
 
-插件不报容量上限数字：`ctx.subagents.maxActiveSubagents` 是 Volatile 配置且为 private，读不到。
+插件不报容量上限数字：`ctx.subagents.maxActiveSubagents` 是 Volatile 配置且为 private，无法读取。
 
 ## 安全与边界
 
@@ -161,11 +161,11 @@ Subagent 分区有三种状态：
 
 ## 终端会话归属
 
-任务账本与操作系统之间没有稳定的 pid 映射，因此对账默认用 label 近似命令行，结论是 `indicative`。
+任务账本与操作系统之间没有稳定的 PID 映射，因此对账默认用 label 近似命令行，结论是 `indicative`。
 
-终端会话是唯一的例外：`ctx.terminals.list(owner)` 返回的快照带 `pid`，这是 DSH 愿意把 pid 交给插件的唯一一处。这些 pid 作为新的归因根参与同一次多源归因，因此终端会话的**整个后代子树**都带上 `rootLabel: 'pty'`——终端里跑起来的进程都在 pty 下面，只标 pty 自己那一行是不够的。
+终端会话是唯一的例外：`ctx.terminals.list(owner)` 返回的快照带 `pid`，这是 DSH 愿意把 PID 交给插件的唯一一处。这些 PID 作为新的归因根参与同一次多源归因，因此终端会话的**整个后代子树**都带上 `rootLabel: 'pty'`——终端里跑起来的进程都在 pty 下面，只标 pty 自己那一行是不够的。
 
-命中该 pid 的任务行不再是 `indicative`，它标为 `via: 'pty-pid'`：label 匹配是两条命令行文本互相包含，而这里是 DSH 自己报告的 pid 相同。
+命中该 PID 的任务行不再是 `indicative`，它标为 `via: 'pty-pid'`：label 匹配是两条命令行文本互相包含，而这里是 DSH 自己报告的 PID 相同。
 
 **归因到 `pty` 的进程不可终止。** 终端里跑着的 dev server、watcher、`npm install` 正被一个活着的 PTY 合法拥有，把它们当成宿主树的残留去结束，等于结束用户正在用的东西。整棵终端归属子树都由那个 pty 拥有，因此 pty 根与它下面的每一行都带拒绝码 `pty_owned`。
 
